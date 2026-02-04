@@ -51,10 +51,21 @@ const topTools: ToolButton[] = [
 		label: 'Lines',
 		icon: (
 			<Icon>
-				{/* draw line between bubble edges (prevents a “dot” inside the bubble from line endcaps) */}
+				{/* draw line between bubble edges (prevents a "dot" inside the bubble from line endcaps) */}
 				<path d="M6.5 17.5L17.5 6.5" />
 				<circle cx="4" cy="20" r="2.5" fill="none" stroke="currentColor" strokeWidth={1.5} />
 				<circle cx="20" cy="4" r="2.5" fill="none" stroke="currentColor" strokeWidth={1.5} />
+			</Icon>
+		),
+	},
+	{
+		id: 'projection',
+		label: 'Projection',
+		icon: (
+			<Icon>
+				{/* RR box icon - rectangle with entry line */}
+				<rect x="4" y="6" width="16" height="12" fill="none" stroke="currentColor" strokeWidth={1.5} />
+				<path d="M4 12h16" stroke="currentColor" strokeWidth={1.5} strokeDasharray="2,2" />
 			</Icon>
 		),
 	},
@@ -215,8 +226,11 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
 	const [showLinesMenu, setShowLinesMenu] = useState(false);
 	const [hoveredLinesItemId, setHoveredLinesItemId] = useState<string | null>(null);
-	const [selectedLinesType, setSelectedLinesType] = useState<'lines' | 'horizontal-line'>('lines');
-	const { activeTool, setActiveTool, selectedDrawingId, drawings, removeDrawing, updateDrawing, setSelectedDrawingId, setSelectedHorizontalLineId } =
+	const [selectedLinesType, setSelectedLinesType] = useState<'lines' | 'ray' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel'>('lines');
+	const [showProjectionMenu, setShowProjectionMenu] = useState(false);
+	const [hoveredProjectionItemId, setHoveredProjectionItemId] = useState<string | null>(null);
+	const [selectedProjectionType, setSelectedProjectionType] = useState<'long-position'>('long-position');
+	const { activeTool, setActiveTool, selectedDrawingId, drawings, removeDrawing, updateDrawing, setSelectedDrawingId, setSelectedHorizontalLineId, setSelectedHorizontalRayId, setSelectedLineId } =
 		useDrawing();
 
 	// Keep toolbar highlight in sync with the actual active drawing tool.
@@ -228,8 +242,11 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			return;
 		}
 
-		if (activeTool === 'lines' || activeTool === 'horizontal-line') {
+		if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel') {
 			setActiveToolId('lines');
+		}
+		if (activeTool === 'long-position') {
+			setActiveToolId('projection');
 		}
 	}, [activeTool]);
 
@@ -241,8 +258,18 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	];
 
 	const linesMenuItems = [
-		{ id: 'lines', label: 'Lines', icon: 'ray' },
+		{ id: 'lines', label: 'Trend line', icon: 'ray' },
+		{ id: 'ray', label: 'Ray', icon: 'ray-line' },
 		{ id: 'horizontal-line', label: 'Horizontal line', icon: 'hline' },
+		{ id: 'horizontal-ray', label: 'Horizontal ray', icon: 'hray' },
+	];
+
+	const channelsMenuItems: Array<{ id: string; label: string; icon: string }> = [
+		{ id: 'parallel-channel', label: 'Parallel channel', icon: 'parallel-channel' },
+	];
+
+	const projectionMenuItems: Array<{ id: string; label: string; icon: string }> = [
+		{ id: 'long-position', label: 'Long Position', icon: 'long-position' },
 	];
 
 	const renderButton = (tool: ToolButton) => {
@@ -277,6 +304,8 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							removeDrawing(selectedDrawingId);
 							setSelectedDrawingId(null);
 							setSelectedHorizontalLineId(null);
+							setSelectedHorizontalRayId(null);
+							setSelectedLineId(null);
 							return;
 						}
 
@@ -429,6 +458,87 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			);
 		}
 
+		if (tool.id === 'projection') {
+			return (
+				<div key={tool.id} className="relative">
+					<button
+						type="button"
+						aria-label={tool.label}
+						title={tool.label}
+						className={[
+							'h-10 w-10 grid place-items-center rounded-lg transition-colors',
+							activeToolId === 'projection'
+								? 'text-blue-600'
+								: 'text-slate-900 hover:bg-slate-100 active:bg-slate-200',
+						].join(' ')}
+						onClick={() => {
+							setActiveToolId('projection');
+							setActiveTool(selectedProjectionType as any);
+							setShowProjectionMenu((v) => !v);
+						}}
+					>
+						{tool.icon}
+					</button>
+
+					{showProjectionMenu && (
+						<div
+							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[180px] z-50"
+							onMouseLeave={() => setShowProjectionMenu(false)}
+						>
+							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
+								Projection
+							</div>
+							{projectionMenuItems.map((item) => {
+								const isSelected = selectedProjectionType === item.id;
+								const isHovered = hoveredProjectionItemId === item.id;
+
+								return (
+									<button
+										key={item.id}
+										type="button"
+										onClick={() => {
+											setSelectedProjectionType(item.id as 'long-position');
+											setActiveTool(item.id as any);
+											setShowProjectionMenu(false);
+										}}
+										onMouseEnter={() => setHoveredProjectionItemId(item.id)}
+										onMouseLeave={() => setHoveredProjectionItemId(null)}
+										className={[
+											'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
+											isSelected
+												? 'bg-slate-700 text-white'
+												: 'text-slate-900 hover:bg-transparent',
+										].join(' ')}
+									>
+										<span className="flex items-center gap-2">
+											{item.icon === 'long-position' && (
+												<Icon className={`h-4 w-4 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.5}>
+													<rect x="4" y="6" width="16" height="12" fill="none" stroke="currentColor" />
+													<path d="M4 12h16" stroke="currentColor" strokeDasharray="2,2" />
+												</Icon>
+											)}
+											{item.label}
+										</span>
+										{(isSelected || isHovered) && (
+											<svg
+												className={`h-4 w-4 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`}
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+												strokeWidth={2}
+											>
+												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+											</svg>
+										)}
+									</button>
+								);
+							})}
+						</div>
+					)}
+				</div>
+			);
+		}
+
 		if (tool.id === 'lines') {
 			return (
 				<div key={tool.id} className="relative">
@@ -455,6 +565,27 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 								<path d="M2 12L22 12" />
 								<circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" strokeWidth={1.5} />
 							</Icon>
+						) : selectedLinesType === 'horizontal-ray' ? (
+							<Icon>
+								<path d="M4 12L22 12" />
+								<circle cx="4" cy="12" r="2.5" fill="none" stroke="currentColor" strokeWidth={1.5} />
+							</Icon>
+						) : selectedLinesType === 'ray' ? (
+							<Icon>
+								<path d="M6.5 17.5L17.5 6.5" />
+								<circle cx="4" cy="20" r="2.5" fill="none" stroke="currentColor" strokeWidth={1.5} />
+								<circle cx="12" cy="12" r="2.5" fill="none" stroke="currentColor" strokeWidth={1.5} />
+							</Icon>
+						) : selectedLinesType === 'parallel-channel' ? (
+							<Icon>
+								{/* Simplified parallel channel icon for toolbar */}
+								<path d="M4 18L18 6" stroke="currentColor" strokeWidth={1.5} />
+								<path d="M4 6L18 18" stroke="currentColor" strokeWidth={1.5} />
+								<circle cx="4" cy="18" r="2" fill="none" stroke="currentColor" strokeWidth={1.5} />
+								<circle cx="18" cy="6" r="2" fill="none" stroke="currentColor" strokeWidth={1.5} />
+								<circle cx="4" cy="6" r="2" fill="none" stroke="currentColor" strokeWidth={1.5} />
+								<circle cx="18" cy="18" r="2" fill="none" stroke="currentColor" strokeWidth={1.5} />
+							</Icon>
 						) : (
 							tool.icon
 						)}
@@ -465,6 +596,10 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[180px] z-50"
 							onMouseLeave={() => setShowLinesMenu(false)}
 						>
+							{/* Section Heading */}
+							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">
+								Lines
+							</div>
 							{linesMenuItems.map((item) => {
 								const isSelected = selectedLinesType === item.id;
 								const isHovered = hoveredLinesItemId === item.id;
@@ -496,10 +631,23 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 													<circle cx="20" cy="4" r="2.2" fill="none" stroke="currentColor" strokeWidth={1.5} />
 												</Icon>
 											)}
+											{item.icon === 'ray-line' && (
+												<Icon className={`h-4 w-4 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.5}>
+													<path d="M6.5 17.5L17.5 6.5" />
+													<circle cx="4" cy="20" r="2.2" fill="none" stroke="currentColor" strokeWidth={1.5} />
+													<circle cx="12" cy="12" r="2.2" fill="none" stroke="currentColor" strokeWidth={1.5} />
+												</Icon>
+											)}
 											{item.icon === 'hline' && (
 												<Icon className={`h-4 w-4 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.2}>
 													<path d="M3 12L21 12" />
 													<circle cx="12" cy="12" r="1.6" fill="none" stroke="currentColor" strokeWidth={1.5} />
+												</Icon>
+											)}
+											{item.icon === 'hray' && (
+												<Icon className={`h-4 w-4 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.5}>
+													<path d="M4 12L21 12" />
+													<circle cx="4" cy="12" r="2.2" fill="none" stroke="currentColor" strokeWidth={1.5} />
 												</Icon>
 											)}
 											{item.label}
@@ -518,6 +666,71 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 									</button>
 								);
 							})}
+							
+							{/* Channels Section */}
+							{channelsMenuItems.length > 0 && (
+								<>
+									<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide border-t border-slate-100 mt-1">
+										Channels
+									</div>
+									{channelsMenuItems.map((item) => {
+										const isSelected = selectedLinesType === item.id;
+										const isHovered = hoveredLinesItemId === item.id;
+
+										return (
+											<button
+												key={item.id}
+												type="button"
+												onClick={() => {
+													setSelectedLinesType(item.id as any);
+													setActiveTool(item.id as any);
+													setActiveToolId('lines');
+													setShowLinesMenu(false);
+												}}
+												onMouseEnter={() => setHoveredLinesItemId(item.id)}
+												onMouseLeave={() => setHoveredLinesItemId(null)}
+												className={[
+													'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
+													isSelected
+														? 'bg-slate-700 text-white'
+														: 'text-slate-900 hover:bg-transparent',
+												].join(' ')}
+											>
+												<span className="flex items-center gap-2">
+													{item.icon === 'parallel-channel' && (
+														<Icon className={`h-4 w-4 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.5}>
+															{/* Two parallel lines with shaded area */}
+															<path d="M4 18L18 6" stroke="currentColor" />
+															<path d="M4 6L18 18" stroke="currentColor" />
+															<path d="M4 12L18 12" stroke="currentColor" strokeDasharray="2,2" />
+															{/* Corner bubbles */}
+															<circle cx="4" cy="18" r="2" fill="none" stroke="currentColor" />
+															<circle cx="18" cy="6" r="2" fill="none" stroke="currentColor" />
+															<circle cx="4" cy="6" r="2" fill="none" stroke="currentColor" />
+															<circle cx="18" cy="18" r="2" fill="none" stroke="currentColor" />
+															{/* Middle squares */}
+															<rect x="10" y="11" width="3" height="3" fill="none" stroke="currentColor" />
+															<rect x="11" y="5" width="3" height="3" fill="none" stroke="currentColor" />
+														</Icon>
+													)}
+													{item.label}
+												</span>
+												{(isSelected || isHovered) && (
+													<svg
+														className={`h-4 w-4 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`}
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+														strokeWidth={2}
+													>
+														<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+													</svg>
+												)}
+											</button>
+										);
+									})}
+								</>
+							)}
 						</div>
 					)}
 				</div>
