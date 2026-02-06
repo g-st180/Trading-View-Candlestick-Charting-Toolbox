@@ -1511,6 +1511,76 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return bestId;
         };
 
+        // Find which long-position (RR box) is being hovered (check if point is inside the box)
+        const findHoveredLongPositionId = (localX: number, localY: number): string | null => {
+            const series = seriesRef.current;
+            const chart = chartRef.current;
+            if (!series || !chart) return null;
+
+            for (const d of drawings) {
+                if (d.type !== 'long-position') continue;
+                if (d.hidden) continue;
+                if (d.entryPrice == null || d.stopLoss == null || d.takeProfit == null || d.startTime == null || d.endTime == null) continue;
+
+                const startX = chart.timeScale().timeToCoordinate(d.startTime as any);
+                const endX = chart.timeScale().timeToCoordinate(d.endTime as any);
+                const entryY = series.priceToCoordinate(d.entryPrice);
+                const stopLossY = series.priceToCoordinate(d.stopLoss);
+                const takeProfitY = series.priceToCoordinate(d.takeProfit);
+
+                if (startX == null || endX == null || entryY == null || stopLossY == null || takeProfitY == null) continue;
+
+                const boxX = Math.min(startX, endX);
+                const boxWidth = Math.abs(endX - startX);
+                const boxTop = Math.min(takeProfitY, stopLossY, entryY);
+                const boxBottom = Math.max(takeProfitY, stopLossY, entryY);
+
+                // Check if point is inside the box
+                if (localX >= boxX && localX <= boxX + boxWidth && localY >= boxTop && localY <= boxBottom) {
+                    return d.id;
+                }
+            }
+
+            return null;
+        };
+
+        // Find which parallel channel (if any) is being hovered (check if point is inside the quadrilateral)
+        const findHoveredParallelChannelId = (localX: number, localY: number): string | null => {
+            const series = seriesRef.current;
+            const chart = chartRef.current;
+            if (!series || !chart) return null;
+
+            for (const d of drawings) {
+                if (d.type !== 'parallel-channel') continue;
+                if (d.hidden) continue;
+                if (!d.points || d.points.length < 4) continue;
+
+                const [start1, end1, start2, end2] = d.points;
+                const p1 = chartToScreen(start1);
+                const p2 = chartToScreen(end1);
+                const p3 = chartToScreen(end2);
+                const p4 = chartToScreen(start2);
+
+                if (!p1 || !p2 || !p3 || !p4) continue;
+
+                // Check if point is inside the quadrilateral (shaded area) using point-in-polygon test
+                const points = [p1, p2, p3, p4];
+                let inside = false;
+                for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+                    const xi = points[i].x, yi = points[i].y;
+                    const xj = points[j].x, yj = points[j].y;
+                    const intersect = ((yi > localY) !== (yj > localY)) && (localX < (xj - xi) * (localY - yi) / (yj - yi) + xi);
+                    if (intersect) inside = !inside;
+                }
+
+                if (inside) {
+                    return d.id;
+                }
+            }
+
+            return null;
+        };
+
         // Find which handle (start/end) is being hovered
         const findHoveredHandle = (localX: number, localY: number): string | null => {
             const series = seriesRef.current;
@@ -1672,6 +1742,20 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 return;
             }
 
+            // Then check long-position RR box body
+            const longPositionId = findHoveredLongPositionId(x, y);
+            if (longPositionId) {
+                setHoveredLineId(longPositionId);
+                return;
+            }
+
+            // Then check parallel channel body
+            const parallelChannelId = findHoveredParallelChannelId(x, y);
+            if (parallelChannelId) {
+                setHoveredLineId(parallelChannelId);
+                return;
+            }
+
             // Then check line
             const lineId = findHoveredLineId(x, y);
             setHoveredLineId(lineId);
@@ -1704,7 +1788,6 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 setSelectedDrawingId(lineId);
                 setSelectedHorizontalLineId(null); // Clear horizontal line selection
                 setSelectedHorizontalRayId(null); // Clear horizontal ray selection
-                
             } else {
                     // Click outside: clear selection only for specific tool types (don't affect other tools)
                     const target = e.target as HTMLElement;
@@ -1738,8 +1821,10 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     // NOTE: Also handles ray tool (same interaction pattern)
     // NOTE: Also handles parallel-channel (4 corners: start1, end1, start2, end2, and 2 middle squares: mid1, mid2)
     // NOTE: Also handles long-position (3 squares: top-left, bottom-left, right-middle, and 1 bubble: left-middle)
-    // NOTE: Also handles line move (when clicking on line body, not handles)
-    const draggingLineHandleRef = useRef<{ lineId: string; handle: 'start' | 'end' | 'start1' | 'end1' | 'start2' | 'end2' | 'mid1' | 'mid2' | 'top-left' | 'bottom-left' | 'right-middle' | 'left-middle' | 'line-move'; initialStart?: ChartPoint; initialEnd?: ChartPoint; initialClickX?: number; initialClickY?: number } | null>(null);
+    // NOTE: Also handles line body drag (moving entire line)
+    // NOTE: Also handles parallel-channel body drag (moving entire channel)
+    // NOTE: Also handles long-position body drag (moving entire RR box)
+    const draggingLineHandleRef = useRef<{ lineId: string; handle: 'start' | 'end' | 'start1' | 'end1' | 'start2' | 'end2' | 'mid1' | 'mid2' | 'top-left' | 'bottom-left' | 'right-middle' | 'left-middle' | 'line-body' | 'parallel-channel-body' | 'long-position-body'; initialClickTime?: number; initialClickPrice?: number; initialStartTime?: number; initialStartPrice?: number; initialEndTime?: number; initialEndPrice?: number; initialStart1Time?: number; initialStart1Price?: number; initialEnd1Time?: number; initialEnd1Price?: number; initialStart2Time?: number; initialStart2Price?: number; initialEnd2Time?: number; initialEnd2Price?: number; initialEntryPrice?: number; initialStopLoss?: number; initialTakeProfit?: number; initialLongPositionStartTime?: number; initialLongPositionEndTime?: number } | null>(null);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -1774,12 +1859,13 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return { x, y };
         };
 
-        const findHoveredLineIdLocal = (localX: number, localY: number): string | null => {
+        // Find which line (if any) is being hovered
+        const findHoveredLineId = (localX: number, localY: number): string | null => {
             const series = seriesRef.current;
             const chart = chartRef.current;
             if (!series || !chart) return null;
 
-            const thresholdPx = 8;
+            const thresholdPx = 8; // Distance threshold for line hover
             let bestId: string | null = null;
             let bestDist = Number.POSITIVE_INFINITY;
 
@@ -1798,15 +1884,25 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 if (lengthSq === 0) continue;
 
                 let dist: number;
+
                 if (d.type === 'ray') {
+                    // For ray: check distance to extended ray (from start through end to edge)
+                    // Calculate direction vector
                     const unitX = dx / Math.sqrt(lengthSq);
                     const unitY = dy / Math.sqrt(lengthSq);
+
+                    // Project point onto the infinite ray
                     const t = ((localX - start.x) * unitX + (localY - start.y) * unitY);
-                    if (t < 0) continue;
+                    
+                    // Only consider points in the forward direction (from start through end)
+                    if (t < 0) continue; // Behind the start point
+
+                    // Calculate closest point on the ray
                     const projX = start.x + t * unitX;
                     const projY = start.y + t * unitY;
                     dist = Math.sqrt((localX - projX) ** 2 + (localY - projY) ** 2);
                 } else {
+                    // For lines: check distance to line segment (between bubbles only)
                     const t = Math.max(0, Math.min(1, ((localX - start.x) * dx + (localY - start.y) * dy) / lengthSq));
                     const projX = start.x + t * dx;
                     const projY = start.y + t * dy;
@@ -1822,38 +1918,74 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return bestId;
         };
 
-        const findHoveredHandleLocal = (localX: number, localY: number): string | null => {
+        // Find which parallel channel (if any) is being hovered (check if point is inside the quadrilateral)
+        const findHoveredParallelChannelId = (localX: number, localY: number): string | null => {
             const series = seriesRef.current;
             const chart = chartRef.current;
             if (!series || !chart) return null;
 
-            const handleRadius = 8;
-            let bestHandle: string | null = null;
-            let bestDist = Number.POSITIVE_INFINITY;
-
             for (const d of drawings) {
-                if (d.type !== 'lines' && d.type !== 'ray') continue;
+                if (d.type !== 'parallel-channel') continue;
                 if (d.hidden) continue;
-                if (!d.points || d.points.length < 2) continue;
+                if (!d.points || d.points.length < 4) continue;
 
-                const start = chartToScreen(d.points[0]);
-                const end = chartToScreen(d.points[1]);
-                if (!start || !end) continue;
+                const [start1, end1, start2, end2] = d.points;
+                const p1 = chartToScreen(start1);
+                const p2 = chartToScreen(end1);
+                const p3 = chartToScreen(end2);
+                const p4 = chartToScreen(start2);
 
-                const distStart = Math.sqrt((localX - start.x) ** 2 + (localY - start.y) ** 2);
-                const distEnd = Math.sqrt((localX - end.x) ** 2 + (localY - end.y) ** 2);
+                if (!p1 || !p2 || !p3 || !p4) continue;
 
-                if (distStart <= handleRadius && distStart < bestDist) {
-                    bestDist = distStart;
-                    bestHandle = `${d.id}:start`;
+                // Check if point is inside the quadrilateral (shaded area) using point-in-polygon test
+                const points = [p1, p2, p3, p4];
+                let inside = false;
+                for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+                    const xi = points[i].x, yi = points[i].y;
+                    const xj = points[j].x, yj = points[j].y;
+                    const intersect = ((yi > localY) !== (yj > localY)) && (localX < (xj - xi) * (localY - yi) / (yj - yi) + xi);
+                    if (intersect) inside = !inside;
                 }
-                if (distEnd <= handleRadius && distEnd < bestDist) {
-                    bestDist = distEnd;
-                    bestHandle = `${d.id}:end`;
+
+                if (inside) {
+                    return d.id;
                 }
             }
 
-            return bestHandle;
+            return null;
+        };
+
+        // Find which long-position (RR box) is being hovered (check if point is inside the box)
+        const findHoveredLongPositionId = (localX: number, localY: number): string | null => {
+            const series = seriesRef.current;
+            const chart = chartRef.current;
+            if (!series || !chart) return null;
+
+            for (const d of drawings) {
+                if (d.type !== 'long-position') continue;
+                if (d.hidden) continue;
+                if (d.entryPrice == null || d.stopLoss == null || d.takeProfit == null || d.startTime == null || d.endTime == null) continue;
+
+                const startX = chart.timeScale().timeToCoordinate(d.startTime as any);
+                const endX = chart.timeScale().timeToCoordinate(d.endTime as any);
+                const entryY = series.priceToCoordinate(d.entryPrice);
+                const stopLossY = series.priceToCoordinate(d.stopLoss);
+                const takeProfitY = series.priceToCoordinate(d.takeProfit);
+
+                if (startX == null || endX == null || entryY == null || stopLossY == null || takeProfitY == null) continue;
+
+                const boxX = Math.min(startX, endX);
+                const boxWidth = Math.abs(endX - startX);
+                const boxTop = Math.min(takeProfitY, stopLossY, entryY);
+                const boxBottom = Math.max(takeProfitY, stopLossY, entryY);
+
+                // Check if point is inside the box
+                if (localX >= boxX && localX <= boxX + boxWidth && localY >= boxTop && localY <= boxBottom) {
+                    return d.id;
+                }
+            }
+
+            return null;
         };
 
         const startDrag = (e: PointerEvent) => {
@@ -1861,53 +1993,168 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position') return;
             
             const { x, y } = getLocalXY(e);
-            const handleId = findHoveredHandleLocal(x, y);
-            const lineId = handleId ? handleId.split(':')[0] : findHoveredLineIdLocal(x, y);
-            
-            // Check if clicking on a line body (not on handles) - start line move
-            if (!handleId && lineId) {
-                const clickedDrawing = drawings.find(d => d.id === lineId);
-                if (clickedDrawing?.type === 'lines' && clickedDrawing.points && clickedDrawing.points.length >= 2 && !clickedDrawing.locked) {
-                    // Store initial points and click position for line move
-                    draggingLineHandleRef.current = {
-                        lineId,
-                        handle: 'line-move',
-                        initialStart: clickedDrawing.points[0],
-                        initialEnd: clickedDrawing.points[1],
-                        initialClickX: x,
-                        initialClickY: y,
-                    };
-                    setSelectedLineId(lineId);
-                    setSelectedDrawingId(lineId);
-                    
-                    try {
-                        container.setPointerCapture(e.pointerId);
-                    } catch {
-                        // ignore
-                    }
-                    e.preventDefault();
-                    return;
+            const chart = chartRef.current;
+            const series = seriesRef.current;
+            if (!chart || !series) return;
+
+            // First check if clicking on a handle
+            if (hoveredLineHandleId) {
+                const parts = hoveredLineHandleId.split(':');
+                const lineId = parts[0];
+                const handle = parts[1] as 'start' | 'end' | 'start1' | 'end1' | 'start2' | 'end2' | 'mid1' | 'mid2' | 'top-left' | 'bottom-left' | 'right-middle' | 'left-middle';
+                const targetDrawing = drawings.find((d) => d.id === lineId);
+                if (!targetDrawing || targetDrawing.locked) return;
+
+                draggingLineHandleRef.current = { lineId, handle };
+                setSelectedLineId(lineId);
+                setSelectedDrawingId(lineId);
+
+                try {
+                    container.setPointerCapture(e.pointerId);
+                } catch {
+                    // ignore
                 }
+                e.preventDefault();
+                return;
             }
-            
-            if (!handleId) return;
 
-            const parts = handleId.split(':');
-            const handleLineId = parts[0];
-            const handle = parts[1] as 'start' | 'end' | 'start1' | 'end1' | 'start2' | 'end2' | 'mid1' | 'mid2' | 'top-left' | 'bottom-left' | 'right-middle' | 'left-middle';
-            const targetDrawing = drawings.find((d) => d.id === handleLineId);
-            if (!targetDrawing || targetDrawing.locked) return;
+            // Then check if clicking on a long-position RR box body (not a handle)
+            const longPositionId = findHoveredLongPositionId(x, y);
+            if (longPositionId) {
+                const targetDrawing = drawings.find((d) => d.id === longPositionId);
+                if (!targetDrawing || targetDrawing.locked) return;
+                if (targetDrawing.type !== 'long-position') return;
+                if (targetDrawing.entryPrice == null || targetDrawing.stopLoss == null || targetDrawing.takeProfit == null || targetDrawing.startTime == null || targetDrawing.endTime == null) return;
 
-            draggingLineHandleRef.current = { lineId: handleLineId, handle };
-            setSelectedLineId(handleLineId);
-            setSelectedDrawingId(handleLineId);
+                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickPrice = series.coordinateToPrice(y);
+                if (clickTime == null || clickPrice == null) return;
 
-            try {
-                container.setPointerCapture(e.pointerId);
-            } catch {
-                // ignore
+                draggingLineHandleRef.current = {
+                    lineId: longPositionId,
+                    handle: 'long-position-body',
+                    initialClickTime: clickTime,
+                    initialClickPrice: clickPrice,
+                    initialEntryPrice: targetDrawing.entryPrice,
+                    initialStopLoss: targetDrawing.stopLoss,
+                    initialTakeProfit: targetDrawing.takeProfit,
+                    initialLongPositionStartTime: targetDrawing.startTime,
+                    initialLongPositionEndTime: targetDrawing.endTime,
+                };
+                setSelectedLineId(longPositionId);
+                setSelectedDrawingId(longPositionId);
+
+                try {
+                    container.setPointerCapture(e.pointerId);
+                } catch {
+                    // ignore
+                }
+                // Disable pointer events on chart canvas to prevent panning
+                const chartContainer = (chart as any).chartElement?.parentElement || container;
+                if (chartContainer) {
+                    const canvas = chartContainer.querySelector('canvas');
+                    if (canvas) {
+                        (canvas as any).__originalPointerEvents = canvas.style.pointerEvents;
+                        canvas.style.pointerEvents = 'none';
+                    }
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                return;
             }
-            e.preventDefault();
+
+            // Then check if clicking on a parallel channel body (not a handle)
+            const parallelChannelId = findHoveredParallelChannelId(x, y);
+            if (parallelChannelId) {
+                const targetDrawing = drawings.find((d) => d.id === parallelChannelId);
+                if (!targetDrawing || targetDrawing.locked) return;
+                if (targetDrawing.type !== 'parallel-channel') return;
+                if (!targetDrawing.points || targetDrawing.points.length < 4) return;
+
+                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickPrice = series.coordinateToPrice(y);
+                if (clickTime == null || clickPrice == null) return;
+
+                const [start1, end1, start2, end2] = targetDrawing.points;
+                draggingLineHandleRef.current = {
+                    lineId: parallelChannelId,
+                    handle: 'parallel-channel-body',
+                    initialClickTime: clickTime,
+                    initialClickPrice: clickPrice,
+                    initialStart1Time: start1.time as number,
+                    initialStart1Price: start1.price,
+                    initialEnd1Time: end1.time as number,
+                    initialEnd1Price: end1.price,
+                    initialStart2Time: start2.time as number,
+                    initialStart2Price: start2.price,
+                    initialEnd2Time: end2.time as number,
+                    initialEnd2Price: end2.price,
+                };
+                setSelectedLineId(parallelChannelId);
+                setSelectedDrawingId(parallelChannelId);
+
+                try {
+                    container.setPointerCapture(e.pointerId);
+                } catch {
+                    // ignore
+                }
+                // Disable pointer events on chart canvas to prevent panning
+                const chartContainer = (chart as any).chartElement?.parentElement || container;
+                if (chartContainer) {
+                    const canvas = chartContainer.querySelector('canvas');
+                    if (canvas) {
+                        (canvas as any).__originalPointerEvents = canvas.style.pointerEvents;
+                        canvas.style.pointerEvents = 'none';
+                    }
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Then check if clicking on a line body (not a handle)
+            const lineId = findHoveredLineId(x, y);
+            if (lineId) {
+                const targetDrawing = drawings.find((d) => d.id === lineId);
+                if (!targetDrawing || targetDrawing.locked) return;
+                if (targetDrawing.type !== 'lines' && targetDrawing.type !== 'ray') return;
+                if (!targetDrawing.points || targetDrawing.points.length < 2) return;
+
+                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickPrice = series.coordinateToPrice(y);
+                if (clickTime == null || clickPrice == null) return;
+
+                const [startPoint, endPoint] = targetDrawing.points;
+                draggingLineHandleRef.current = {
+                    lineId,
+                    handle: 'line-body',
+                    initialClickTime: clickTime,
+                    initialClickPrice: clickPrice,
+                    initialStartTime: startPoint.time as number,
+                    initialStartPrice: startPoint.price,
+                    initialEndTime: endPoint.time as number,
+                    initialEndPrice: endPoint.price,
+                };
+                setSelectedLineId(lineId);
+                setSelectedDrawingId(lineId);
+
+                try {
+                    container.setPointerCapture(e.pointerId);
+                } catch {
+                    // ignore
+                }
+                // Disable pointer events on chart canvas to prevent panning
+                const chartContainer = (chart as any).chartElement?.parentElement || container;
+                if (chartContainer) {
+                    const canvas = chartContainer.querySelector('canvas');
+                    if (canvas) {
+                        (canvas as any).__originalPointerEvents = canvas.style.pointerEvents;
+                        canvas.style.pointerEvents = 'none';
+                    }
+                }
+                e.preventDefault();
+                e.stopPropagation();
+            }
         };
 
         // Update immediately for responsive dragging
@@ -1915,7 +2162,121 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             const drag = draggingLineHandleRef.current;
             if (!drag) return;
 
+            // Prevent chart panning when dragging - CRITICAL: must be first
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Ensure we maintain pointer capture to prevent chart from receiving events
+            if (container && e.pointerId !== undefined) {
+                try {
+                    if (!container.hasPointerCapture(e.pointerId)) {
+                        container.setPointerCapture(e.pointerId);
+                    }
+                } catch {
+                    // ignore
+                }
+            }
+
             const { x, y } = getLocalXY(e);
+            const chart = chartRef.current;
+            const series = seriesRef.current;
+            if (!chart || !series) return;
+
+            // Handle long-position RR box body drag (moving entire box)
+            if (drag.handle === 'long-position-body') {
+                if (drag.initialClickTime == null || drag.initialClickPrice == null || 
+                    drag.initialEntryPrice == null || drag.initialStopLoss == null ||
+                    drag.initialTakeProfit == null || drag.initialLongPositionStartTime == null ||
+                    drag.initialLongPositionEndTime == null) return;
+
+                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentPrice = series.coordinateToPrice(y);
+                if (currentTime == null || currentPrice == null) return;
+
+                // Calculate the offset from initial click position
+                const timeOffset = currentTime - drag.initialClickTime;
+                const priceOffset = currentPrice - drag.initialClickPrice;
+
+                // Move all prices and times by the offset
+                updateDrawing(drag.lineId, (prev) => {
+                    if (prev.type === 'long-position' && prev.entryPrice != null && prev.stopLoss != null && prev.takeProfit != null && prev.startTime != null && prev.endTime != null) {
+                        return {
+                            ...prev,
+                            entryPrice: drag.initialEntryPrice! + priceOffset,
+                            stopLoss: drag.initialStopLoss! + priceOffset,
+                            takeProfit: drag.initialTakeProfit! + priceOffset,
+                            startTime: drag.initialLongPositionStartTime! + timeOffset,
+                            endTime: drag.initialLongPositionEndTime! + timeOffset,
+                        };
+                    }
+                    return prev;
+                });
+                return;
+            }
+
+            // Handle parallel channel body drag (moving entire channel)
+            if (drag.handle === 'parallel-channel-body') {
+                if (drag.initialClickTime == null || drag.initialClickPrice == null || 
+                    drag.initialStart1Time == null || drag.initialStart1Price == null ||
+                    drag.initialEnd1Time == null || drag.initialEnd1Price == null ||
+                    drag.initialStart2Time == null || drag.initialStart2Price == null ||
+                    drag.initialEnd2Time == null || drag.initialEnd2Price == null) return;
+
+                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentPrice = series.coordinateToPrice(y);
+                if (currentTime == null || currentPrice == null) return;
+
+                // Calculate the offset from initial click position
+                const timeOffset = currentTime - drag.initialClickTime;
+                const priceOffset = currentPrice - drag.initialClickPrice;
+
+                // Move all 4 points by the offset
+                updateDrawing(drag.lineId, (prev) => {
+                    if (prev.type === 'parallel-channel' && prev.points && prev.points.length >= 4) {
+                        return {
+                            ...prev,
+                            points: [
+                                { time: drag.initialStart1Time! + timeOffset, price: drag.initialStart1Price! + priceOffset },
+                                { time: drag.initialEnd1Time! + timeOffset, price: drag.initialEnd1Price! + priceOffset },
+                                { time: drag.initialStart2Time! + timeOffset, price: drag.initialStart2Price! + priceOffset },
+                                { time: drag.initialEnd2Time! + timeOffset, price: drag.initialEnd2Price! + priceOffset },
+                            ],
+                        };
+                    }
+                    return prev;
+                });
+                return;
+            }
+
+            // Handle line body drag (moving entire line)
+            if (drag.handle === 'line-body') {
+                if (drag.initialClickTime == null || drag.initialClickPrice == null || 
+                    drag.initialStartTime == null || drag.initialStartPrice == null ||
+                    drag.initialEndTime == null || drag.initialEndPrice == null) return;
+
+                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentPrice = series.coordinateToPrice(y);
+                if (currentTime == null || currentPrice == null) return;
+
+                // Calculate the offset from initial click position
+                const timeOffset = currentTime - drag.initialClickTime;
+                const priceOffset = currentPrice - drag.initialClickPrice;
+
+                // Move both start and end points by the offset
+                updateDrawing(drag.lineId, (prev) => {
+                    if ((prev.type === 'lines' || prev.type === 'ray') && prev.points && prev.points.length >= 2) {
+                        return {
+                            ...prev,
+                            points: [
+                                { time: drag.initialStartTime! + timeOffset, price: drag.initialStartPrice! + priceOffset },
+                                { time: drag.initialEndTime! + timeOffset, price: drag.initialEndPrice! + priceOffset },
+                            ],
+                        };
+                    }
+                    return prev;
+                });
+                return;
+            }
             
             // Handle long-position RR box handles
             if (drag.handle === 'top-left' || drag.handle === 'bottom-left' || drag.handle === 'right-middle' || drag.handle === 'left-middle') {
@@ -2021,106 +2382,6 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                             }
                         }
                         
-                        return { ...prev, points: newPoints };
-                    }
-                    return prev;
-                });
-                return;
-            }
-            
-            // Handle line-move case first (before converting to chart coordinates)
-            if (drag.handle === 'line-move' && drag.initialStart && drag.initialEnd && drag.initialClickX != null && drag.initialClickY != null) {
-                const chart = chartRef.current;
-                const series = seriesRef.current;
-                if (!chart || !series) return;
-                
-                // Move threshold check
-                const moveThreshold = 3; // pixels
-                const dx = Math.abs(x - drag.initialClickX);
-                const dy = Math.abs(y - drag.initialClickY);
-                
-                if (dx < moveThreshold && dy < moveThreshold) {
-                    // User hasn't moved enough, don't update yet
-                    return;
-                }
-                
-                // Calculate screen space delta (works even when mouse is outside container)
-                const screenDeltaX = x - drag.initialClickX;
-                const screenDeltaY = y - drag.initialClickY;
-                
-                // Get visible ranges to convert screen delta to chart delta
-                const visibleRange = chart.timeScale().getVisibleRange();
-                const rect = container.getBoundingClientRect();
-                
-                if (visibleRange && rect.width > 0 && rect.height > 0) {
-                    const timeRange = typeof visibleRange.to === 'number' && typeof visibleRange.from === 'number' 
-                        ? visibleRange.to - visibleRange.from 
-                        : 0;
-                    
-                    // Get price range from visible coordinates
-                    const topY = 0;
-                    const bottomY = rect.height;
-                    const topPrice = series.coordinateToPrice(topY);
-                    const bottomPrice = series.coordinateToPrice(bottomY);
-                    
-                    if (topPrice != null && bottomPrice != null && timeRange > 0) {
-                        const priceRange = Math.abs(topPrice - bottomPrice);
-                        
-                        // Convert screen delta to chart delta (proportional to visible range)
-                        // This works even when mouse is outside container bounds
-                        const timeDelta = (screenDeltaX / rect.width) * timeRange;
-                        const priceDelta = -(screenDeltaY / rect.height) * priceRange; // Negative because Y is inverted
-                        
-                        updateDrawing(drag.lineId, (prev) => {
-                            if ((prev.type === 'lines' || prev.type === 'ray') && prev.points && prev.points.length >= 2 && drag.initialStart && drag.initialEnd) {
-                                const newPoints = [...prev.points];
-                                // Apply delta to both points
-                                newPoints[0] = {
-                                    time: drag.initialStart.time + timeDelta,
-                                    price: drag.initialStart.price + priceDelta,
-                                };
-                                newPoints[1] = {
-                                    time: drag.initialEnd.time + timeDelta,
-                                    price: drag.initialEnd.price + priceDelta,
-                                };
-                                return { ...prev, points: newPoints };
-                            }
-                            return prev;
-                        });
-                        return;
-                    }
-                }
-                
-                // Fallback: try direct coordinate conversion if proportional method fails
-                const rect2 = container.getBoundingClientRect();
-                const clampedX = Math.max(0, Math.min(x, rect2.width));
-                const clampedY = Math.max(0, Math.min(y, rect2.height));
-                
-                const currentPoint = screenToChart(clampedX, clampedY);
-                if (!currentPoint) return;
-                
-                const initialClampedX = Math.max(0, Math.min(drag.initialClickX, rect2.width));
-                const initialClampedY = Math.max(0, Math.min(drag.initialClickY, rect2.height));
-                const initialClickTime = chart.timeScale().coordinateToTime(initialClampedX as any) as any;
-                const initialClickPrice = series.coordinateToPrice(initialClampedY);
-                
-                if (initialClickTime == null || initialClickPrice == null) return;
-                
-                const timeDelta = currentPoint.time - initialClickTime;
-                const priceDelta = currentPoint.price - initialClickPrice;
-                
-                updateDrawing(drag.lineId, (prev) => {
-                    if ((prev.type === 'lines' || prev.type === 'ray') && prev.points && prev.points.length >= 2 && drag.initialStart && drag.initialEnd) {
-                        const newPoints = [...prev.points];
-                        // Apply delta to both points
-                        newPoints[0] = {
-                            time: drag.initialStart.time + timeDelta,
-                            price: drag.initialStart.price + priceDelta,
-                        };
-                        newPoints[1] = {
-                            time: drag.initialEnd.time + timeDelta,
-                            price: drag.initialEnd.price + priceDelta,
-                        };
                         return { ...prev, points: newPoints };
                     }
                     return prev;
@@ -2254,42 +2515,8 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     const newPoints = [...prev.points];
                     if (drag.handle === 'start') {
                         newPoints[0] = newPoint;
-                    } else if (drag.handle === 'end') {
+                    } else {
                         newPoints[1] = newPoint;
-                    } else if (drag.handle === 'line-move' && drag.initialStart && drag.initialEnd && drag.initialClickX != null && drag.initialClickY != null) {
-                        // Move entire line: calculate delta from initial click position
-                        const moveThreshold = 3; // pixels
-                        const dx = Math.abs(x - drag.initialClickX);
-                        const dy = Math.abs(y - drag.initialClickY);
-                        
-                        if (dx < moveThreshold && dy < moveThreshold) {
-                            // User hasn't moved enough, don't update yet
-                            return prev;
-                        }
-                        
-                        // Convert initial click position to chart coordinates
-                        const chart = chartRef.current;
-                        const series = seriesRef.current;
-                        if (!chart || !series) return prev;
-                        
-                        const initialClickTime = chart.timeScale().coordinateToTime(drag.initialClickX as any) as any;
-                        const initialClickPrice = series.coordinateToPrice(drag.initialClickY);
-                        
-                        if (initialClickTime == null || initialClickPrice == null) return prev;
-                        
-                        // Calculate delta in chart coordinates
-                        const timeDelta = newPoint.time - initialClickTime;
-                        const priceDelta = newPoint.price - initialClickPrice;
-                        
-                        // Apply delta to both points
-                        newPoints[0] = {
-                            time: drag.initialStart.time + timeDelta,
-                            price: drag.initialStart.price + priceDelta,
-                        };
-                        newPoints[1] = {
-                            time: drag.initialEnd.time + timeDelta,
-                            price: drag.initialEnd.price + priceDelta,
-                        };
                     }
                     return { ...prev, points: newPoints };
                 }
@@ -2297,7 +2524,31 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             });
         };
 
-        const stop = () => {
+        const stop = (e?: PointerEvent) => {
+            if (e) {
+                // Release pointer capture
+                if (container && e.pointerId !== undefined) {
+                    try {
+                        if (container.hasPointerCapture(e.pointerId)) {
+                            container.releasePointerCapture(e.pointerId);
+                        }
+                    } catch {
+                        // ignore
+                    }
+                }
+            }
+            // Re-enable pointer events on chart canvas
+            const chart = chartRef.current;
+            if (chart) {
+                const chartContainer = (chart as any).chartElement?.parentElement || container;
+                if (chartContainer) {
+                    const canvas = chartContainer.querySelector('canvas');
+                    if (canvas && (canvas as any).__originalPointerEvents !== undefined) {
+                        canvas.style.pointerEvents = (canvas as any).__originalPointerEvents || '';
+                        delete (canvas as any).__originalPointerEvents;
+                    }
+                }
+            }
             draggingLineHandleRef.current = null;
         };
 
@@ -2312,7 +2563,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             document.removeEventListener('pointerup', stop, true);
             document.removeEventListener('pointercancel', stop, true);
         };
-        }, [activeTool, hoveredLineHandleId, drawings, setSelectedLineId, setSelectedDrawingId, updateDrawing]);
+    }, [activeTool, hoveredLineHandleId, drawings, setSelectedLineId, setSelectedDrawingId, updateDrawing]);
 
     // ============================================================================
     // CURSOR MANAGEMENT (Shared for all tools)
@@ -2347,8 +2598,14 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 cursorStyle = 'move';
             }
         } else if (hoveredLineId) {
-            // White hand cursor (grab) when hovering lines or ray tools
-            cursorStyle = 'grab';
+            // White hand cursor (grab) when hovering lines, ray, parallel channel, or long-position
+            // Check if we're currently dragging a line body, parallel channel body, or long-position body
+            const dragHandle = draggingLineHandleRef.current?.handle;
+            if (dragHandle === 'line-body' || dragHandle === 'parallel-channel-body' || dragHandle === 'long-position-body') {
+                cursorStyle = 'grabbing';
+            } else {
+                cursorStyle = 'grab';
+            }
         } else if (hoveredHorizontalRayHandleId) {
             // Move cursor when hovering over horizontal ray bubble handle
             cursorStyle = 'move';
