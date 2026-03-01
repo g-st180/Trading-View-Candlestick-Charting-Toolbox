@@ -2,13 +2,19 @@ import { useEffect, useRef } from 'react';
 import { useDrawing, Drawing, ChartPoint } from './DrawingContext';
 import { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
 
-interface DrawingOverlayProps {
+export type CandleBar = { time: number; open: number; high: number; low: number; close: number };
+
+export interface DrawingOverlayProps {
 	chart: IChartApi | null;
 	series: ISeriesApi<'Candlestick'> | null;
 	containerRef: React.RefObject<HTMLDivElement>;
+	/** When true, RR box and parallel channel are drawn by a series primitive (above grid, behind candles); overlay only draws handles/labels */
+	underlayIsPrimitive?: boolean;
+	candlestickDataRef?: React.RefObject<Array<{ time: number; open: number; high: number; low: number; close: number }>>;
+	candlestickDataVersion?: number;
 }
 
-export default function DrawingOverlay({ chart, series, containerRef }: DrawingOverlayProps) {
+export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0 }: DrawingOverlayProps) {
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const { drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, updateDrawing } = useDrawing();
 	const drawingsRef = useRef<Drawing[]>([]);
@@ -41,9 +47,9 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 		selectedLineIdRef.current = selectedLineId;
 		hoveredLineIdRef.current = hoveredLineId;
 		hoveredLineHandleIdRef.current = hoveredLineHandleId;
-		// Trigger a repaint whenever drawings change (this is the main "make it draw" hook).
+		// Trigger a repaint whenever drawings or candle data change (for RR outcome dotted line).
 		scheduleRedrawRef.current?.();
-	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId]);
+	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion]);
 
 	useEffect(() => {
 		if (!canvasRef.current || !containerRef.current) return;
@@ -93,20 +99,18 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 			}
 		};
 
-		// Redraw all drawings
+		// Redraw all drawings (underlay drawn by series primitive when underlayIsPrimitive; overlay draws handles/labels)
 		const redraw = () => {
 			ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-			// Draw completed drawings
 			drawingsRef.current.forEach((drawing) => {
 				if (drawing.hidden) return;
-				drawDrawing(ctx, drawing, container, chartToScreen);
+				drawDrawing(ctx, drawing, container, chartToScreen, 'overlay');
 			});
 
-			// Draw current drawing in progress
 			if (currentDrawingRef.current) {
 				if (!currentDrawingRef.current.hidden) {
-				drawDrawing(ctx, currentDrawingRef.current, container, chartToScreen);
+					drawDrawing(ctx, currentDrawingRef.current, container, chartToScreen, 'overlay');
 				}
 			}
 		};
@@ -205,7 +209,8 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 		ctx: CanvasRenderingContext2D,
 		drawing: Drawing,
 		container: HTMLDivElement,
-		chartToScreen: (point: ChartPoint) => { x: number; y: number } | null
+		chartToScreen: (point: ChartPoint) => { x: number; y: number } | null,
+		drawLayer: 'overlay' | 'underlay' = 'overlay'
 	) => {
 		// Compute drawable plot width (exclude right price scale if present)
 		const rightScaleWidth =
@@ -215,9 +220,10 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 		const plotWidth = Math.max(0, Math.floor(container.getBoundingClientRect().width - rightScaleWidth));
 
 		// ============================================================================
-		// LONG POSITION (RR BOX) RENDERING
+		// LONG / SHORT POSITION (RR BOX) RENDERING
 		// ============================================================================
-		if (drawing.type === 'long-position' && drawing.entryPrice != null && drawing.stopLoss != null && drawing.takeProfit != null && drawing.startTime != null && drawing.endTime != null) {
+		if ((drawing.type === 'long-position' || drawing.type === 'short-position') && drawing.entryPrice != null && drawing.stopLoss != null && drawing.takeProfit != null && drawing.startTime != null && drawing.endTime != null) {
+			const isShort = drawing.type === 'short-position';
 			ctx.save();
 			if (!chart || !series) {
 				ctx.restore();
@@ -240,7 +246,10 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 					// Keep intended time width in pixels when a coordinate is null
 					const timeWidth = drawing.endTime - drawing.startTime;
 					if (startX == null) startX = leftX;
-					if (endX == null) endX = (startX ?? leftX) + (timeWidth / visibleTimeSpan) * visiblePixelSpan;
+					if (endX == null) {
+						const base = startX ?? leftX;
+						endX = (base != null ? Number(base) + (timeWidth / visibleTimeSpan) * visiblePixelSpan : rightX) as any;
+					}
 				} else if (startX == null || endX == null) {
 					if (startX == null) startX = leftX;
 					if (endX == null) endX = rightX;
@@ -263,32 +272,155 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
 			ctx.clip();
 
-			// Draw risk area (entry to stop loss) in red
+			// Outcome for dotted line (used on underlay; outcome vars needed for underlay-only path)
+			const bars = candlestickDataRef?.current ?? [];
+			const startTime = drawing.startTime;
+			const endTime = drawing.endTime;
+			const entryPrice = drawing.entryPrice;
+			const takeProfit = drawing.takeProfit;
+			const stopLoss = drawing.stopLoss;
+			const barsInRange = bars
+				.filter((b) => (b.time as number) >= startTime && (b.time as number) <= endTime)
+				.sort((a, b) => (a.time as number) - (b.time as number));
+			// First bar that breaches the middle (entry) line: candle range crosses entry price
+			const firstBreachBar = barsInRange.find((b) => b.low <= entryPrice && b.high >= entryPrice);
+			const dotStartTime = firstBreachBar != null ? (firstBreachBar.time as number) : startTime;
+			const dotStartX = ts.timeToCoordinate(dotStartTime as any);
+			const dotStartY = entryY;
+
+			// Only consider bars at or after the breach (dotted line always left-to-right: exits after entry)
+			const barsAfterBreach = barsInRange.filter((b) => (b.time as number) >= dotStartTime);
+
+			let outcomeEndTime: number = endTime;
+			let outcomeEndPrice: number = entryPrice;
+			for (const bar of barsAfterBreach) {
+				const t = bar.time as number;
+				const high = bar.high;
+				const low = bar.low;
+				// Long: TP above entry (high >= TP), SL below (low <= SL). Short: TP below (low <= TP), SL above (high >= SL).
+				const hitTP = isShort ? low <= takeProfit : high >= takeProfit;
+				const hitSL = isShort ? high >= stopLoss : low <= stopLoss;
+				if (hitTP && hitSL) {
+					const outcome = bar.close > bar.open ? 'tp' : 'sl';
+					outcomeEndTime = t;
+					outcomeEndPrice = outcome === 'tp' ? takeProfit : stopLoss;
+					break;
+				}
+				if (hitTP) {
+					outcomeEndTime = t;
+					outcomeEndPrice = takeProfit;
+					break;
+				}
+				if (hitSL) {
+					outcomeEndTime = t;
+					outcomeEndPrice = stopLoss;
+					break;
+				}
+			}
+			if (barsAfterBreach.length > 0 && outcomeEndTime === endTime && outcomeEndPrice === entryPrice) {
+				const lastBar = barsAfterBreach[barsAfterBreach.length - 1];
+				outcomeEndTime = lastBar.time as number;
+				outcomeEndPrice = lastBar.close;
+			}
+			const dotEndX = ts.timeToCoordinate(outcomeEndTime as any);
+			const dotEndY = series.priceToCoordinate(outcomeEndPrice);
+			const hasBreach = firstBreachBar != null;
+
 			const riskTop = Math.min(entryY, stopLossY);
 			const riskBottom = Math.max(entryY, stopLossY);
-			ctx.save();
-			ctx.fillStyle = isHidden ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.2)';
-			ctx.fillRect(boxX, riskTop, boxWidth, riskBottom - riskTop);
-			ctx.restore();
-
-			// Draw reward area (entry to take profit) in green
 			const rewardTop = Math.min(entryY, takeProfitY);
 			const rewardBottom = Math.max(entryY, takeProfitY);
-			ctx.save();
-			ctx.fillStyle = isHidden ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.2)';
-			ctx.fillRect(boxX, rewardTop, boxWidth, rewardBottom - rewardTop);
-			ctx.restore();
 
-			// Draw solid black line at entry price (no border around box)
-			ctx.save();
-			ctx.strokeStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : '#000000';
-			ctx.lineWidth = isHidden ? 0.5 : 0.5;
-			ctx.beginPath();
-			ctx.moveTo(boxX, entryY);
-			ctx.lineTo(boxX + boxWidth, entryY);
-			ctx.stroke();
-			ctx.restore();
+			// Underlay: draw full RR box (fills + black line + dotted line) behind candles
+			if (drawLayer === 'underlay') {
+				ctx.save();
+				ctx.fillStyle = isHidden ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.2)';
+				ctx.fillRect(boxX, riskTop, boxWidth, riskBottom - riskTop);
+				ctx.restore();
+				ctx.save();
+				ctx.fillStyle = isHidden ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.2)';
+				ctx.fillRect(boxX, rewardTop, boxWidth, rewardBottom - rewardTop);
+				ctx.restore();
+				ctx.save();
+				ctx.strokeStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : '#000000';
+				ctx.lineWidth = 0.35;
+				ctx.beginPath();
+				ctx.moveTo(boxX, entryY);
+				ctx.lineTo(boxX + boxWidth, entryY);
+				ctx.stroke();
+				ctx.restore();
+				if (hasBreach && dotEndX != null && dotEndY != null) {
+					const dotStartXVal = dotStartX != null ? dotStartX : boxX;
+					// Darkened rectangle from first breach of middle line to outcome point (dotted line endpoints)
+					ctx.save();
+					const rectLeft = Math.min(dotStartXVal, dotEndX);
+					const rectRight = Math.max(dotStartXVal, dotEndX);
+					const rectTop = Math.min(dotStartY, dotEndY);
+					const rectBottom = Math.max(dotStartY, dotEndY);
+					ctx.fillStyle = isHidden ? 'rgba(0, 0, 0, 0.04)' : 'rgba(0, 0, 0, 0.07)';
+					ctx.fillRect(rectLeft, rectTop, rectRight - rectLeft, rectBottom - rectTop);
+					ctx.restore();
+					ctx.save();
+					ctx.setLineDash([4, 4]);
+					ctx.lineWidth = 0.8;
+					ctx.strokeStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : '#000000';
+					ctx.beginPath();
+					ctx.moveTo(dotStartXVal, dotStartY);
+					ctx.lineTo(dotEndX, dotEndY);
+					ctx.stroke();
+					ctx.setLineDash([]);
+					ctx.restore();
+				}
+				ctx.restore();
+				return;
+			}
 
+			// Overlay: when underlay is drawn by primitive, only labels + handles; otherwise draw box + labels + handles
+			if (!underlayIsPrimitive) {
+				ctx.save();
+				ctx.fillStyle = isHidden ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.2)';
+				ctx.fillRect(boxX, riskTop, boxWidth, riskBottom - riskTop);
+				ctx.restore();
+				ctx.save();
+				ctx.fillStyle = isHidden ? 'rgba(34, 197, 94, 0.1)' : 'rgba(34, 197, 94, 0.2)';
+				ctx.fillRect(boxX, rewardTop, boxWidth, rewardBottom - rewardTop);
+				ctx.restore();
+				ctx.save();
+				ctx.strokeStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : '#000000';
+				ctx.lineWidth = 0.35;
+				ctx.beginPath();
+				ctx.moveTo(boxX, entryY);
+				ctx.lineTo(boxX + boxWidth, entryY);
+				ctx.stroke();
+				ctx.restore();
+				if (hasBreach && dotEndX != null && dotEndY != null) {
+					const dotStartXVal = dotStartX != null ? dotStartX : boxX;
+					// Darkened rectangle from first breach of middle line to outcome point (dotted line endpoints)
+					ctx.save();
+					const rectLeft = Math.min(dotStartXVal, dotEndX);
+					const rectRight = Math.max(dotStartXVal, dotEndX);
+					const rectTop = Math.min(dotStartY, dotEndY);
+					const rectBottom = Math.max(dotStartY, dotEndY);
+					ctx.fillStyle = isHidden ? 'rgba(0, 0, 0, 0.04)' : 'rgba(0, 0, 0, 0.07)';
+					ctx.fillRect(rectLeft, rectTop, rectRight - rectLeft, rectBottom - rectTop);
+					ctx.restore();
+					ctx.save();
+					ctx.setLineDash([4, 4]);
+					ctx.lineWidth = 0.8;
+					ctx.strokeStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : '#000000';
+					ctx.beginPath();
+					ctx.moveTo(dotStartXVal, dotStartY);
+					ctx.lineTo(dotEndX, dotEndY);
+					ctx.stroke();
+					ctx.setLineDash([]);
+					ctx.restore();
+				}
+			}
+
+			// Labels and handles only when hovered or selected (same condition)
+			const shouldShowHandles = !isHidden && (selectedHorizontalLineIdRef.current === drawing.id || selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id);
+
+			if (shouldShowHandles) {
 			// Calculate Risk/Reward ratio
 			const riskHeight = Math.abs(entryY - stopLossY);
 			const rewardHeight = Math.abs(takeProfitY - entryY);
@@ -296,36 +428,27 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 			const rrRatioText = `Risk/Reward Ratio: ${rrRatio.toFixed(2)}`;
 
 			// Determine which side to show the label on (with hysteresis to prevent flickering)
-			// Use hysteresis: switch to green at ratio >= 1.0, switch back to red at ratio < 0.9
 			const HYSTERESIS_THRESHOLD_HIGH = 1.0;
 			const HYSTERESIS_THRESHOLD_LOW = 0.9;
 			const lastSide = drawing.lastRRSide;
 			
 			let currentSide: 'green' | 'red';
 			if (lastSide === 'green') {
-				// If we were on green side, stay there until ratio drops below low threshold
 				currentSide = rrRatio >= HYSTERESIS_THRESHOLD_LOW ? 'green' : 'red';
 			} else if (lastSide === 'red') {
-				// If we were on red side, stay there until ratio rises above high threshold
 				currentSide = rrRatio >= HYSTERESIS_THRESHOLD_HIGH ? 'green' : 'red';
 			} else {
-				// First time: use high threshold
 				currentSide = rrRatio >= HYSTERESIS_THRESHOLD_HIGH ? 'green' : 'red';
 			}
 
-			// Update the drawing's lastRRSide if it changed
 			if (currentSide !== lastSide && updateDrawingRef.current) {
 				updateDrawingRef.current(drawing.id, (prev: any) => ({ ...prev, lastRRSide: currentSide }));
 			}
 
-			// Position text near the black line (entryY) on the determined side
 			const textX = boxX + boxWidth / 2;
-			const offsetFromLine = 15; // Distance from the black line
-			const textY = currentSide === 'green'
-				? entryY - offsetFromLine  // Above the black line (in green area)
-				: entryY + offsetFromLine;  // Below the black line (in red area)
+			const offsetFromLine = 15;
+			const textY = currentSide === 'green' ? entryY - offsetFromLine : entryY + offsetFromLine;
 
-			// Measure text width for background rectangle
 			ctx.save();
 			ctx.font = '12px sans-serif';
 			const textMetrics = ctx.measureText(rrRatioText);
@@ -337,21 +460,18 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 			const rectX = textX - rectWidth / 2;
 			const rectY = textY - rectHeight / 2;
 
-			// Draw muted red rounded rectangle background (middle ground)
 			ctx.fillStyle = isHidden ? 'rgba(212, 77, 77, 0.7)' : '#d44d4d';
 			ctx.beginPath();
 			const borderRadius = 6;
 			drawRoundedRect(ctx, rectX, rectY, rectWidth, rectHeight, borderRadius);
 			ctx.fill();
 
-			// Draw white border
 			ctx.strokeStyle = '#ffffff';
 			ctx.lineWidth = 1.5;
 			ctx.beginPath();
 			drawRoundedRect(ctx, rectX, rectY, rectWidth, rectHeight, borderRadius);
 			ctx.stroke();
 
-			// Draw white text
 			ctx.fillStyle = '#ffffff';
 			ctx.textAlign = 'center';
 			ctx.textBaseline = 'middle';
@@ -359,14 +479,12 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 			ctx.fillText(rrRatioText, textX, textY);
 			ctx.restore();
 
-			// Calculate percentages
+			// Target label (above green for long, below green for short)
 			const targetPercent = ((drawing.takeProfit - drawing.entryPrice) / drawing.entryPrice) * 100;
 			const stopLossPercent = ((drawing.entryPrice - drawing.stopLoss) / drawing.entryPrice) * 100;
-
-			// Target label (on top of green rectangle)
 			const targetText = `Target: ${drawing.takeProfit.toFixed(2)} (${targetPercent >= 0 ? '+' : ''}${targetPercent.toFixed(2)}%)`;
 			const targetTextX = boxX + boxWidth / 2;
-			const targetTextY = takeProfitY - 15; // Position above the green area
+			const targetTextY = isShort ? takeProfitY + 15 : takeProfitY - 15;
 
 			ctx.save();
 			ctx.font = '12px sans-serif';
@@ -379,20 +497,17 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 			const targetRectX = targetTextX - targetRectWidth / 2;
 			const targetRectY = targetTextY - targetRectHeight / 2;
 
-			// Draw muted green rounded rectangle background for Target (middle ground)
 			ctx.fillStyle = isHidden ? 'rgba(60, 174, 60, 0.7)' : '#3cae3c';
 			ctx.beginPath();
 			drawRoundedRect(ctx, targetRectX, targetRectY, targetRectWidth, targetRectHeight, 6);
 			ctx.fill();
 
-			// Draw white border
 			ctx.strokeStyle = '#ffffff';
 			ctx.lineWidth = 1.5;
 			ctx.beginPath();
 			drawRoundedRect(ctx, targetRectX, targetRectY, targetRectWidth, targetRectHeight, 6);
 			ctx.stroke();
 
-			// Draw white text
 			ctx.fillStyle = '#ffffff';
 			ctx.textAlign = 'center';
 			ctx.textBaseline = 'middle';
@@ -400,10 +515,10 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 			ctx.fillText(targetText, targetTextX, targetTextY);
 			ctx.restore();
 
-			// Stop Loss label (below red rectangle)
+			// Stop Loss label (below red for long, above red for short)
 			const stopLossText = `Stop Loss: ${drawing.stopLoss.toFixed(2)} (${stopLossPercent >= 0 ? '+' : ''}${stopLossPercent.toFixed(2)}%)`;
 			const stopLossTextX = boxX + boxWidth / 2;
-			const stopLossTextY = stopLossY + 15; // Position below the red area
+			const stopLossTextY = isShort ? stopLossY - 15 : stopLossY + 15;
 
 			ctx.save();
 			ctx.font = '12px sans-serif';
@@ -416,29 +531,26 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 			const stopLossRectX = stopLossTextX - stopLossRectWidth / 2;
 			const stopLossRectY = stopLossTextY - stopLossRectHeight / 2;
 
-			// Draw muted red rounded rectangle background for Stop Loss (middle ground)
 			ctx.fillStyle = isHidden ? 'rgba(212, 77, 77, 0.7)' : '#d44d4d';
 			ctx.beginPath();
 			drawRoundedRect(ctx, stopLossRectX, stopLossRectY, stopLossRectWidth, stopLossRectHeight, 6);
 			ctx.fill();
 
-			// Draw white border
 			ctx.strokeStyle = '#ffffff';
 			ctx.lineWidth = 1.5;
 			ctx.beginPath();
 			drawRoundedRect(ctx, stopLossRectX, stopLossRectY, stopLossRectWidth, stopLossRectHeight, 6);
 			ctx.stroke();
 
-			// Draw white text
 			ctx.fillStyle = '#ffffff';
 			ctx.textAlign = 'center';
 			ctx.textBaseline = 'middle';
 			ctx.font = '12px sans-serif';
 			ctx.fillText(stopLossText, stopLossTextX, stopLossTextY);
 			ctx.restore();
+			}
 
 			// Draw 3 square handles and 1 bubble when hovered/selected
-			const shouldShowHandles = !isHidden && (selectedHorizontalLineIdRef.current === drawing.id || selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id);
 			if (shouldShowHandles) {
 				const squareSize = 11;
 				const borderRadius = 3;
@@ -465,8 +577,8 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 				ctx.stroke();
 				ctx.restore();
 
-				// Top-left square (for green/take profit area)
-				const topLeftY = Math.min(takeProfitY, entryY);
+				// Top-left square (top of box: green for long, red for short)
+				const topLeftY = Math.min(takeProfitY, stopLossY);
 				ctx.save();
 				if (isTopLeftHovered) {
 					ctx.shadowColor = 'rgba(59, 130, 246, 0.9)';
@@ -481,8 +593,8 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 				ctx.stroke();
 				ctx.restore();
 
-				// Bottom-left square (for red/stop loss area)
-				const bottomLeftY = Math.max(stopLossY, entryY);
+				// Bottom-left square (bottom of box: red for long, green for short)
+				const bottomLeftY = Math.max(takeProfitY, stopLossY);
 				ctx.save();
 				if (isBottomLeftHovered) {
 					ctx.shadowColor = 'rgba(59, 130, 246, 0.9)';
@@ -1053,57 +1165,111 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 				const start2 = parallelScreenPoints[2];
 				const end2 = parallelScreenPoints[3];
 
-				// Draw shaded area between the two parallel lines
-				ctx.save();
-				ctx.fillStyle = isHidden ? 'rgba(255, 165, 0, 0.1)' : 'rgba(255, 165, 0, 0.2)';
-				ctx.beginPath();
-				ctx.moveTo(start1.x, start1.y);
-				ctx.lineTo(end1.x, end1.y);
-				ctx.lineTo(end2.x, end2.y);
-				ctx.lineTo(start2.x, start2.y);
-				ctx.closePath();
-				ctx.fill();
-				ctx.restore();
+				// Underlay: draw channel visuals only (behind candles)
+				if (drawLayer === 'underlay') {
+					ctx.save();
+					ctx.fillStyle = isHidden ? 'rgba(255, 165, 0, 0.1)' : 'rgba(255, 165, 0, 0.2)';
+					ctx.beginPath();
+					ctx.moveTo(start1.x, start1.y);
+					ctx.lineTo(end1.x, end1.y);
+					ctx.lineTo(end2.x, end2.y);
+					ctx.lineTo(start2.x, start2.y);
+					ctx.closePath();
+					ctx.fill();
+					ctx.restore();
+					ctx.save();
+					ctx.strokeStyle = lineColor;
+					ctx.lineWidth = lineWidth;
+					ctx.lineCap = 'round';
+					ctx.beginPath();
+					ctx.moveTo(start1.x, start1.y);
+					ctx.lineTo(end1.x, end1.y);
+					ctx.stroke();
+					ctx.restore();
+					ctx.save();
+					ctx.strokeStyle = lineColor;
+					ctx.lineWidth = lineWidth;
+					ctx.lineCap = 'round';
+					ctx.beginPath();
+					ctx.moveTo(start2.x, start2.y);
+					ctx.lineTo(end2.x, end2.y);
+					ctx.stroke();
+					ctx.restore();
+					ctx.save();
+					ctx.strokeStyle = lineColor;
+					ctx.lineWidth = lineWidth * 0.5;
+					ctx.setLineDash([4, 8]);
+					ctx.beginPath();
+					const midStartX = (start1.x + start2.x) / 2;
+					const midStartY = (start1.y + start2.y) / 2;
+					const midEndX = (end1.x + end2.x) / 2;
+					const midEndY = (end1.y + end2.y) / 2;
+					ctx.moveTo(midStartX, midStartY);
+					ctx.lineTo(midEndX, midEndY);
+					ctx.stroke();
+					ctx.setLineDash([]);
+					ctx.restore();
+					ctx.restore();
+					ctx.restore();
+					return;
+				}
 
-				// Draw first parallel line
-				ctx.save();
-				ctx.strokeStyle = lineColor;
-				ctx.lineWidth = lineWidth;
-				ctx.lineCap = 'round';
-				ctx.beginPath();
-				ctx.moveTo(start1.x, start1.y);
-				ctx.lineTo(end1.x, end1.y);
-				ctx.stroke();
-				ctx.restore();
+				// Overlay: draw channel when no primitive underlay, or while drawing (current drawing not in primitive yet)
+				const hasUnderlay = underlayIsPrimitive;
+				const drawChannelOnOverlay = !hasUnderlay || isCurrentDrawing;
+				if (drawChannelOnOverlay) {
+					// Draw shaded area between the two parallel lines
+					ctx.save();
+					ctx.fillStyle = isHidden ? 'rgba(255, 165, 0, 0.1)' : 'rgba(255, 165, 0, 0.2)';
+					ctx.beginPath();
+					ctx.moveTo(start1.x, start1.y);
+					ctx.lineTo(end1.x, end1.y);
+					ctx.lineTo(end2.x, end2.y);
+					ctx.lineTo(start2.x, start2.y);
+					ctx.closePath();
+					ctx.fill();
+					ctx.restore();
 
-				// Draw second parallel line
-				ctx.save();
-				ctx.strokeStyle = lineColor;
-				ctx.lineWidth = lineWidth;
-				ctx.lineCap = 'round';
-				ctx.beginPath();
-				ctx.moveTo(start2.x, start2.y);
-				ctx.lineTo(end2.x, end2.y);
-				ctx.stroke();
-				ctx.restore();
+					// Draw first parallel line
+					ctx.save();
+					ctx.strokeStyle = lineColor;
+					ctx.lineWidth = lineWidth;
+					ctx.lineCap = 'round';
+					ctx.beginPath();
+					ctx.moveTo(start1.x, start1.y);
+					ctx.lineTo(end1.x, end1.y);
+					ctx.stroke();
+					ctx.restore();
 
-				// Draw dashed middle line
-				ctx.save();
-				ctx.strokeStyle = lineColor;
-				ctx.lineWidth = lineWidth * 0.5;
-				ctx.setLineDash([4, 8]);
-				ctx.beginPath();
-				const midStartX = (start1.x + start2.x) / 2;
-				const midStartY = (start1.y + start2.y) / 2;
-				const midEndX = (end1.x + end2.x) / 2;
-				const midEndY = (end1.y + end2.y) / 2;
-				ctx.moveTo(midStartX, midStartY);
-				ctx.lineTo(midEndX, midEndY);
-				ctx.stroke();
-				ctx.setLineDash([]);
-				ctx.restore();
+					// Draw second parallel line
+					ctx.save();
+					ctx.strokeStyle = lineColor;
+					ctx.lineWidth = lineWidth;
+					ctx.lineCap = 'round';
+					ctx.beginPath();
+					ctx.moveTo(start2.x, start2.y);
+					ctx.lineTo(end2.x, end2.y);
+					ctx.stroke();
+					ctx.restore();
 
-				// Show bubbles at corners and squares in middle when hovered/selected
+					// Draw dashed middle line
+					ctx.save();
+					ctx.strokeStyle = lineColor;
+					ctx.lineWidth = lineWidth * 0.5;
+					ctx.setLineDash([4, 8]);
+					ctx.beginPath();
+					const midStartX = (start1.x + start2.x) / 2;
+					const midStartY = (start1.y + start2.y) / 2;
+					const midEndX = (end1.x + end2.x) / 2;
+					const midEndY = (end1.y + end2.y) / 2;
+					ctx.moveTo(midStartX, midStartY);
+					ctx.lineTo(midEndX, midEndY);
+					ctx.stroke();
+					ctx.setLineDash([]);
+					ctx.restore();
+				}
+
+				// Show bubbles at corners and squares in middle when hovered/selected (always on overlay)
 				const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
 				if (shouldShowBubbles) {
 					const r = 5;
@@ -1176,17 +1342,38 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 				const start = parallelScreenPoints[0];
 				const end = parallelScreenPoints[1];
 
-				ctx.save();
-				ctx.strokeStyle = lineColor;
-				ctx.lineWidth = lineWidth;
-				ctx.lineCap = 'round';
-				ctx.beginPath();
-				ctx.moveTo(start.x, start.y);
-				ctx.lineTo(end.x, end.y);
-				ctx.stroke();
-				ctx.restore();
+				// Underlay: draw first line only
+				if (drawLayer === 'underlay') {
+					ctx.save();
+					ctx.strokeStyle = lineColor;
+					ctx.lineWidth = lineWidth;
+					ctx.lineCap = 'round';
+					ctx.beginPath();
+					ctx.moveTo(start.x, start.y);
+					ctx.lineTo(end.x, end.y);
+					ctx.stroke();
+					ctx.restore();
+					ctx.restore();
+					ctx.restore();
+					return;
+				}
 
-				// Show bubbles during drawing
+				// Overlay: draw first line when no primitive underlay, or while drawing (so user sees the line)
+				const hasUnderlay = underlayIsPrimitive;
+				const drawLineOnOverlay = !hasUnderlay || isCurrentDrawing;
+				if (drawLineOnOverlay) {
+					ctx.save();
+					ctx.strokeStyle = lineColor;
+					ctx.lineWidth = lineWidth;
+					ctx.lineCap = 'round';
+					ctx.beginPath();
+					ctx.moveTo(start.x, start.y);
+					ctx.lineTo(end.x, end.y);
+					ctx.stroke();
+					ctx.restore();
+				}
+
+				// Show bubbles during drawing (always on overlay)
 				if (isCurrentDrawing) {
 					const r = 5;
 					ctx.fillStyle = '#ffffff';

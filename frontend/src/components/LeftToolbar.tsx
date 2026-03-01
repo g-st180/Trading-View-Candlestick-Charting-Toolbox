@@ -229,7 +229,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const [selectedLinesType, setSelectedLinesType] = useState<'lines' | 'ray' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel'>('lines');
 	const [showProjectionMenu, setShowProjectionMenu] = useState(false);
 	const [hoveredProjectionItemId, setHoveredProjectionItemId] = useState<string | null>(null);
-	const [selectedProjectionType, setSelectedProjectionType] = useState<'long-position'>('long-position');
+	const [selectedProjectionType, setSelectedProjectionType] = useState<'long-position' | 'short-position'>('long-position');
 	const { activeTool, setActiveTool, selectedDrawingId, drawings, removeDrawing, updateDrawing, setSelectedDrawingId, setSelectedHorizontalLineId, setSelectedHorizontalRayId, setSelectedLineId } =
 		useDrawing();
 
@@ -245,7 +245,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel') {
 			setActiveToolId('lines');
 		}
-		if (activeTool === 'long-position') {
+		if (activeTool === 'long-position' || activeTool === 'short-position') {
 			setActiveToolId('projection');
 		}
 	}, [activeTool]);
@@ -270,6 +270,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 
 	const projectionMenuItems: Array<{ id: string; label: string; icon: string }> = [
 		{ id: 'long-position', label: 'Long Position', icon: 'long-position' },
+		{ id: 'short-position', label: 'Short Position', icon: 'short-position' },
 	];
 
 	const renderButton = (tool: ToolButton) => {
@@ -497,7 +498,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										key={item.id}
 										type="button"
 										onClick={() => {
-											setSelectedProjectionType(item.id as 'long-position');
+											setSelectedProjectionType(item.id as 'long-position' | 'short-position');
 											setActiveTool(item.id as any);
 											setShowProjectionMenu(false);
 										}}
@@ -511,7 +512,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										].join(' ')}
 									>
 										<span className="flex items-center gap-2">
-											{item.icon === 'long-position' && (
+											{(item.icon === 'long-position' || item.icon === 'short-position') && (
 												<Icon className={`h-4 w-4 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.5}>
 													<rect x="4" y="6" width="16" height="12" fill="none" stroke="currentColor" />
 													<path d="M4 12h16" stroke="currentColor" strokeDasharray="2,2" />

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useRef, ReactNode } from 'react';
 
-export type DrawingTool = 'lines' | 'ray' | 'trendline' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel' | 'long-position' | 'fib' | 'brush' | 'text' | null;
+export type DrawingTool = 'lines' | 'ray' | 'trendline' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel' | 'long-position' | 'short-position' | 'fib' | 'brush' | 'text' | null;
 
 // Chart coordinates (time, price) - these stay constant regardless of zoom/pan
 export interface ChartPoint {
