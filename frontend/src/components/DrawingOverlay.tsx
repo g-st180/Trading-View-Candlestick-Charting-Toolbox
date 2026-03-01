@@ -225,10 +225,27 @@ export default function DrawingOverlay({ chart, series, containerRef }: DrawingO
 			}
 
 			const isHidden = drawing.hidden || false;
+			const ts = chart.timeScale();
 
-			// Convert chart coordinates to screen coordinates
-			const startX = chart.timeScale().timeToCoordinate(drawing.startTime as any);
-			const endX = chart.timeScale().timeToCoordinate(drawing.endTime as any);
+			// Convert chart coordinates to screen; if time is outside visible range, use proportional width so box doesn't span to last future timestamp
+			let startX = ts.timeToCoordinate(drawing.startTime as any);
+			let endX = ts.timeToCoordinate(drawing.endTime as any);
+			const visible = ts.getVisibleRange();
+			if (visible && typeof visible.from === 'number' && typeof visible.to === 'number') {
+				const leftX = ts.timeToCoordinate(visible.from as any);
+				const rightX = ts.timeToCoordinate(visible.to as any);
+				const visibleTimeSpan = visible.to - visible.from;
+				const visiblePixelSpan = (rightX != null && leftX != null) ? rightX - leftX : 0;
+				if (visibleTimeSpan > 0 && visiblePixelSpan > 0) {
+					// Keep intended time width in pixels when a coordinate is null
+					const timeWidth = drawing.endTime - drawing.startTime;
+					if (startX == null) startX = leftX;
+					if (endX == null) endX = (startX ?? leftX) + (timeWidth / visibleTimeSpan) * visiblePixelSpan;
+				} else if (startX == null || endX == null) {
+					if (startX == null) startX = leftX;
+					if (endX == null) endX = rightX;
+				}
+			}
 			const entryY = series.priceToCoordinate(drawing.entryPrice);
 			const stopLossY = series.priceToCoordinate(drawing.stopLoss);
 			const takeProfitY = series.priceToCoordinate(drawing.takeProfit);

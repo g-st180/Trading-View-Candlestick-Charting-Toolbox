@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useRef, ReactNode } from 'react';
 
 export type DrawingTool = 'lines' | 'ray' | 'trendline' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel' | 'long-position' | 'fib' | 'brush' | 'text' | null;
 
@@ -39,6 +39,8 @@ export interface Drawing {
 
 interface DrawingContextType {
 	activeTool: DrawingTool;
+	/** Ref updated synchronously when setActiveTool is called so chart handlers see the new tool immediately */
+	activeToolRef: React.MutableRefObject<DrawingTool>;
 	setActiveTool: (tool: DrawingTool) => void;
 	drawings: Drawing[];
 	addDrawing: (drawing: Drawing) => void;
@@ -76,7 +78,12 @@ interface DrawingContextType {
 const DrawingContext = createContext<DrawingContextType | undefined>(undefined);
 
 export function DrawingProvider({ children }: { children: ReactNode }) {
-	const [activeTool, setActiveTool] = useState<DrawingTool>(null);
+	const [activeTool, setActiveToolState] = useState<DrawingTool>(null);
+	const activeToolRef = useRef<DrawingTool>(null);
+	const setActiveTool = (tool: DrawingTool) => {
+		activeToolRef.current = tool;
+		setActiveToolState(tool);
+	};
 	const [drawings, setDrawings] = useState<Drawing[]>([]);
 	const [isDrawing, setIsDrawing] = useState(false);
 	const [currentDrawing, setCurrentDrawing] = useState<Drawing | null>(null);
@@ -111,6 +118,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
 		<DrawingContext.Provider
 			value={{
 				activeTool,
+				activeToolRef,
 				setActiveTool,
 				drawings,
 				addDrawing,

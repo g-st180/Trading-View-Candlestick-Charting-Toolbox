@@ -13,13 +13,21 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     const interactionLayerRef = useRef<HTMLDivElement | null>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+    const futureTimeSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+    const lastFutureTimeRef = useRef<number>(0);
     const [chartApi, setChartApi] = useState<IChartApi | null>(null);
     const [seriesApi, setSeriesApi] = useState<ISeriesApi<'Candlestick'> | null>(null);
     // Note: we intentionally avoid covering the chart with a pointer-events layer during drawing,
     // so the user can still interact with candles/price scale (pan/zoom/scale).
     const lastPriceRef = useRef<number>(150); // Starting price
+    // Current (live) 1m bar: open fixed for the period; high/low running max/min
+    const currentBarOpenRef = useRef<number>(150);
+    const currentBarHighRef = useRef<number>(150);
+    const currentBarLowRef = useRef<number>(150);
+    const lastBarMinuteRef = useRef<number>(0);
     const {
         activeTool,
+        activeToolRef: contextActiveToolRef,
         setActiveTool,
         setIsDrawing,
         setCurrentDrawing,
@@ -53,7 +61,8 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     const setCurrentDrawingRefFn = useRef(setCurrentDrawing);
     const setIsDrawingRefFn = useRef(setIsDrawing);
     const setActiveToolRefFn = useRef(setActiveTool);
-    const activeToolRef = useRef(activeTool);
+    // Use context's ref so tool selection is visible immediately (no one-frame delay)
+    const activeToolRef = contextActiveToolRef;
 
     useEffect(() => {
         addDrawingRefFn.current = addDrawing;
@@ -61,10 +70,6 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         setIsDrawingRefFn.current = setIsDrawing;
         setActiveToolRefFn.current = setActiveTool;
     }, [addDrawing, setCurrentDrawing, setIsDrawing, setActiveTool]);
-
-    useEffect(() => {
-        activeToolRef.current = activeTool;
-    }, [activeTool]);
 
     const draggingHorizontalLineIdRef = useRef<string | null>(null);
     const horizontalPriceLinesRef = useRef<Map<string, any>>(new Map());
@@ -395,7 +400,10 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             timeScale: { 
                 timeVisible: true, 
                 secondsVisible: false,
-                borderColor: '#e2e8f0'
+                borderColor: '#e2e8f0',
+                rightOffset: 12,
+                // Don't scroll left when a new candle appears — keep the same visible range, new candle forms in empty space
+                shiftVisibleRangeOnNewBar: false,
             },
             rightPriceScale: {
                 borderColor: '#e2e8f0'
@@ -411,11 +419,21 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             wickUpColor: '#10b981',
         });
 
+        // Invisible line series only to extend time scale — future timestamps on x-axis, no candles drawn
+        const futureSeries = chart.addLineSeries({
+            lineVisible: false,
+            lastValueVisible: false,
+            priceLineVisible: false,
+            crosshairMarkerVisible: false,
+            lastPriceAnimation: 0,
+        } as any);
+        futureTimeSeriesRef.current = futureSeries;
+
         chartRef.current = chart;
         seriesRef.current = candleSeries;
         setChartApi(chart);
         setSeriesApi(candleSeries);
-
+        
         const handleResize = () => {
             if (chartRef.current && containerRef.current) {
                 const containerHeight = containerRef.current.clientHeight || height;
@@ -456,67 +474,122 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     }, [chartApi, crosshairType]);
 
 
-    // Generate random OHLCV data
-    const generateRandomCandle = (): CandlestickData<Time> => {
-        const basePrice = lastPriceRef.current;
-        const change = (Math.random() - 0.5) * 10; // Random change between -5 and +5
-        const open = basePrice;
-        const close = basePrice + change;
-        const high = Math.max(open, close) + Math.random() * 5;
-        const low = Math.min(open, close) - Math.random() * 5;
-        
-        lastPriceRef.current = close;
-        
-        return {
-            time: (Date.now() / 1000) as UTCTimestamp,
-            open: Number(open.toFixed(2)),
-            high: Number(high.toFixed(2)),
-            low: Number(low.toFixed(2)),
-            close: Number(close.toFixed(2)),
-        };
-    };
+    const barIntervalSeconds = 60; // 1 minute
 
-    // Initialize with some historical data and then update with new data
+    // Initialize with historical data + current bar; live bar updates in place with fixed Open and running High/Low
     useEffect(() => {
         if (!seriesRef.current) return;
 
-        // Generate initial historical data (last 50 candles)
         const initialData: CandlestickData<Time>[] = [];
         let basePrice = 150;
         const now = Date.now() / 1000;
+        const currentMinuteTime = Math.floor(now / barIntervalSeconds) * barIntervalSeconds;
         
-        for (let i = 50; i >= 0; i--) {
+        // Historical bars (50 bars before current minute)
+        for (let i = 50; i >= 1; i--) {
+            const t = (currentMinuteTime - i * barIntervalSeconds) as UTCTimestamp;
             const change = (Math.random() - 0.5) * 10;
             const open = basePrice;
             const close = basePrice + change;
             const high = Math.max(open, close) + Math.random() * 5;
             const low = Math.min(open, close) - Math.random() * 5;
-            
+            basePrice = close;
             initialData.push({
-                time: (now - i * 60) as UTCTimestamp, // 1 minute intervals
+                time: t,
                 open: Number(open.toFixed(2)),
                 high: Number(high.toFixed(2)),
                 low: Number(low.toFixed(2)),
                 close: Number(close.toFixed(2)),
             });
-            
-            basePrice = close;
         }
-        
+
+        // Current minute bar — Open stays fixed; we'll only update High/Low/Close every second
+        initialData.push({
+            time: currentMinuteTime as UTCTimestamp,
+            open: basePrice,
+            high: basePrice,
+            low: basePrice,
+            close: basePrice,
+        });
         lastPriceRef.current = basePrice;
+        currentBarOpenRef.current = basePrice;
+        currentBarHighRef.current = basePrice;
+        currentBarLowRef.current = basePrice;
+        lastBarMinuteRef.current = currentMinuteTime;
+
         seriesRef.current.setData(initialData);
 
-        // Update with new random data every second
+        // Future timestamps only: invisible series so x-axis has labels all the way to the right border when scrolled
+        const futureBarsCount = 600; // 10 hours (1-min bars)
+        const futureData = Array.from({ length: futureBarsCount }, (_, k) => ({
+            time: (currentMinuteTime + (k + 1) * barIntervalSeconds) as UTCTimestamp,
+            value: basePrice,
+        }));
+        futureTimeSeriesRef.current?.setData(futureData);
+        lastFutureTimeRef.current = currentMinuteTime + futureBarsCount * barIntervalSeconds;
+
+        // Position view on the most recent candle: visible range ends at current candle + a little future (not at last future timestamp)
+        const chart = chartRef.current;
+        if (chart) {
+            const ts = chart.timeScale();
+            const rangeEndTime = currentMinuteTime + barIntervalSeconds * (1 + 12); // current candle + 12 bars right margin
+            const rangeStartTime = currentMinuteTime - 50 * barIntervalSeconds; // ~50 bars of history
+            const applyInitialView = () => {
+                try {
+                    (ts as any).setVisibleRange?.({ from: rangeStartTime, to: rangeEndTime });
+                } catch {
+                    try {
+                        (ts as any).setVisibleLogicalRange?.({ from: 0, to: 51 + 12 });
+                    } catch {
+                        // ignore
+                    }
+                }
+            };
+            requestAnimationFrame(applyInitialView);
+            setTimeout(applyInitialView, 100);
+        }
+
+        // Every second: update only Close (and running High/Low); Open stays fixed until the minute rolls over
         const interval = setInterval(() => {
-            if (seriesRef.current) {
-                const candle = generateRandomCandle();
-                seriesRef.current.update(candle);
+            if (!seriesRef.current) return;
+            const nowSec = Date.now() / 1000;
+            const currentMinute = Math.floor(nowSec / barIntervalSeconds) * barIntervalSeconds;
+
+            // New minute: next bar gets Open = last close; update that bar and refresh future timestamps
+            if (currentMinute !== lastBarMinuteRef.current) {
+                lastBarMinuteRef.current = currentMinute;
+                currentBarOpenRef.current = lastPriceRef.current;
+                currentBarHighRef.current = lastPriceRef.current;
+                currentBarLowRef.current = lastPriceRef.current;
+                // Keep future timestamps ahead so x-axis has labels to the right border
+                const nextFutureData = Array.from({ length: futureBarsCount }, (_, k) => ({
+                    time: (currentMinute + (k + 1) * barIntervalSeconds) as UTCTimestamp,
+                    value: lastPriceRef.current,
+                }));
+                futureTimeSeriesRef.current?.setData(nextFutureData);
+                lastFutureTimeRef.current = currentMinute + futureBarsCount * barIntervalSeconds;
             }
+
+            const open = currentBarOpenRef.current;
+            const change = (Math.random() - 0.5) * 10;
+            const close = Number((lastPriceRef.current + change).toFixed(2));
+            lastPriceRef.current = close;
+
+            const high = Number(Math.max(currentBarHighRef.current, open, close).toFixed(2));
+            const low = Number(Math.min(currentBarLowRef.current, open, close).toFixed(2));
+            currentBarHighRef.current = high;
+            currentBarLowRef.current = low;
+
+            seriesRef.current.update({
+                time: currentMinute as UTCTimestamp,
+                open,
+                high,
+                low,
+                close,
+            });
         }, 1000);
 
-        return () => {
-            clearInterval(interval);
-        };
+        return () => clearInterval(interval);
     }, []);
 
     // ============================================================================
@@ -575,21 +648,15 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const stopLoss = entryPrice * 0.99; // 1% down
                 const takeProfit = entryPrice * 1.01; // 1% up
 
-                // Calculate 10 bars width - estimate based on visible time range
+                // Calculate 10 bars width — use visible range when available, else fallback so box still creates
                 const visibleRange = chart.timeScale().getVisibleRange();
-                if (!visibleRange) return;
-                
                 let timeRange: number;
-                if (typeof visibleRange.from === 'number' && typeof visibleRange.to === 'number') {
+                if (visibleRange && typeof visibleRange.from === 'number' && typeof visibleRange.to === 'number') {
                     timeRange = visibleRange.to - visibleRange.from;
                 } else {
-                    // Fallback: assume 1 minute bars (60 seconds)
-                    timeRange = 60 * 10; // 10 bars * 60 seconds
+                    timeRange = 60 * 10; // 10 bars of 1 minute
                 }
-                
-                // Estimate bar width from visible range (assuming ~100 visible bars)
-                // Make sure we have a minimum width
-                const estimatedBarWidth = Math.max(timeRange / 100, 60); // At least 60 seconds per bar
+                const estimatedBarWidth = Math.max(timeRange / 100, 60);
                 const tenBarsWidth = estimatedBarWidth * 10;
                 const endTime = time + tenBarsWidth;
 
@@ -1511,6 +1578,31 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return bestId;
         };
 
+        // Helper: get long-position box x bounds (same fallback as overlay so hit-test matches drawn box)
+        const getLongPositionBoxX = (ch: IChartApi, d: Drawing): { boxX: number; boxWidth: number } | null => {
+            const ts = ch.timeScale();
+            let startX = ts.timeToCoordinate(d.startTime as any);
+            let endX = ts.timeToCoordinate(d.endTime as any);
+            const visible = ts.getVisibleRange();
+            if (visible && typeof visible.from === 'number' && typeof visible.to === 'number') {
+                const leftX = ts.timeToCoordinate(visible.from as any);
+                const rightX = ts.timeToCoordinate(visible.to as any);
+                const visibleTimeSpan = visible.to - visible.from;
+                const visiblePixelSpan = (rightX != null && leftX != null) ? rightX - leftX : 0;
+                if (visibleTimeSpan > 0 && visiblePixelSpan > 0 && leftX != null) {
+                    const timeWidth = (d.endTime ?? 0) - (d.startTime ?? 0);
+                    const baseX = startX ?? leftX;
+                    if (startX == null) startX = leftX as any;
+                    if (endX == null && typeof baseX === 'number') endX = (baseX + (timeWidth / visibleTimeSpan) * visiblePixelSpan) as any;
+                } else if (startX == null || endX == null) {
+                    if (startX == null) startX = leftX;
+                    if (endX == null) endX = rightX;
+                }
+            }
+            if (startX == null || endX == null) return null;
+            return { boxX: Math.min(Number(startX), Number(endX)), boxWidth: Math.abs(Number(endX) - Number(startX)) };
+        };
+
         // Find which long-position (RR box) is being hovered (check if point is inside the box)
         const findHoveredLongPositionId = (localX: number, localY: number): string | null => {
             const series = seriesRef.current;
@@ -1522,16 +1614,14 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 if (d.hidden) continue;
                 if (d.entryPrice == null || d.stopLoss == null || d.takeProfit == null || d.startTime == null || d.endTime == null) continue;
 
-                const startX = chart.timeScale().timeToCoordinate(d.startTime as any);
-                const endX = chart.timeScale().timeToCoordinate(d.endTime as any);
+                const boxBounds = getLongPositionBoxX(chart, d);
+                if (!boxBounds) continue;
+                const { boxX, boxWidth } = boxBounds;
                 const entryY = series.priceToCoordinate(d.entryPrice);
                 const stopLossY = series.priceToCoordinate(d.stopLoss);
                 const takeProfitY = series.priceToCoordinate(d.takeProfit);
+                if (entryY == null || stopLossY == null || takeProfitY == null) continue;
 
-                if (startX == null || endX == null || entryY == null || stopLossY == null || takeProfitY == null) continue;
-
-                const boxX = Math.min(startX, endX);
-                const boxWidth = Math.abs(endX - startX);
                 const boxTop = Math.min(takeProfitY, stopLossY, entryY);
                 const boxBottom = Math.max(takeProfitY, stopLossY, entryY);
 
@@ -1593,21 +1683,19 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             let bestHandle: string | null = null;
             let bestDist = Number.POSITIVE_INFINITY;
 
-            // Check long-position RR box handles first
+            // Check long-position RR box handles first (use same box bounds as overlay)
             for (const d of drawings) {
                 if (d.type === 'long-position' && d.entryPrice != null && d.stopLoss != null && d.takeProfit != null && d.startTime != null && d.endTime != null) {
                     if (d.hidden) continue;
-                    
-                    const startX = chart.timeScale().timeToCoordinate(d.startTime as any);
-                    const endX = chart.timeScale().timeToCoordinate(d.endTime as any);
+
+                    const boxBounds = getLongPositionBoxX(chart, d);
+                    if (!boxBounds) continue;
+                    const { boxX, boxWidth } = boxBounds;
                     const entryY = series.priceToCoordinate(d.entryPrice);
                     const stopLossY = series.priceToCoordinate(d.stopLoss);
                     const takeProfitY = series.priceToCoordinate(d.takeProfit);
-                    
-                    if (startX == null || endX == null || entryY == null || stopLossY == null || takeProfitY == null) continue;
-                    
-                    const boxX = Math.min(startX, endX);
-                    const boxWidth = Math.abs(endX - startX);
+
+                    if (entryY == null || stopLossY == null || takeProfitY == null) continue;
                     
                     // Top-left square (for green/take profit area)
                     const topLeftX = boxX;
@@ -1955,7 +2043,32 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return null;
         };
 
-        // Find which long-position (RR box) is being hovered (check if point is inside the box)
+        // Helper for long-position box x bounds (same as overlay so body click matches)
+        const getLongPositionBoxXDrag = (ch: IChartApi, d: Drawing): { boxX: number; boxWidth: number } | null => {
+            const ts = ch.timeScale();
+            let startX = ts.timeToCoordinate(d.startTime as any);
+            let endX = ts.timeToCoordinate(d.endTime as any);
+            const visible = ts.getVisibleRange();
+            if (visible && typeof visible.from === 'number' && typeof visible.to === 'number') {
+                const leftX = ts.timeToCoordinate(visible.from as any);
+                const rightX = ts.timeToCoordinate(visible.to as any);
+                const visibleTimeSpan = visible.to - visible.from;
+                const visiblePixelSpan = (rightX != null && leftX != null) ? rightX - leftX : 0;
+                if (visibleTimeSpan > 0 && visiblePixelSpan > 0 && leftX != null) {
+                    const timeWidth = (d.endTime ?? 0) - (d.startTime ?? 0);
+                    const baseX = startX ?? leftX;
+                    if (startX == null) startX = leftX as any;
+                    if (endX == null && typeof baseX === 'number') endX = (baseX + (timeWidth / visibleTimeSpan) * visiblePixelSpan) as any;
+                } else if (startX == null || endX == null) {
+                    if (startX == null) startX = leftX;
+                    if (endX == null) endX = rightX;
+                }
+            }
+            if (startX == null || endX == null) return null;
+            return { boxX: Math.min(Number(startX), Number(endX)), boxWidth: Math.abs(Number(endX) - Number(startX)) };
+        };
+
+        // Find which long-position (RR box) is being hovered (for startDrag body click)
         const findHoveredLongPositionId = (localX: number, localY: number): string | null => {
             const series = seriesRef.current;
             const chart = chartRef.current;
@@ -1966,20 +2079,17 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 if (d.hidden) continue;
                 if (d.entryPrice == null || d.stopLoss == null || d.takeProfit == null || d.startTime == null || d.endTime == null) continue;
 
-                const startX = chart.timeScale().timeToCoordinate(d.startTime as any);
-                const endX = chart.timeScale().timeToCoordinate(d.endTime as any);
+                const boxBounds = getLongPositionBoxXDrag(chart, d);
+                if (!boxBounds) continue;
+                const { boxX, boxWidth } = boxBounds;
                 const entryY = series.priceToCoordinate(d.entryPrice);
                 const stopLossY = series.priceToCoordinate(d.stopLoss);
                 const takeProfitY = series.priceToCoordinate(d.takeProfit);
+                if (entryY == null || stopLossY == null || takeProfitY == null) continue;
 
-                if (startX == null || endX == null || entryY == null || stopLossY == null || takeProfitY == null) continue;
-
-                const boxX = Math.min(startX, endX);
-                const boxWidth = Math.abs(endX - startX);
                 const boxTop = Math.min(takeProfitY, stopLossY, entryY);
                 const boxBottom = Math.max(takeProfitY, stopLossY, entryY);
 
-                // Check if point is inside the box
                 if (localX >= boxX && localX <= boxX + boxWidth && localY >= boxTop && localY <= boxBottom) {
                     return d.id;
                 }
