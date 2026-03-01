@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, Time, UTCTimestamp, CrosshairMode } from 'lightweight-charts';
 import { useDrawing, Drawing, ChartPoint } from './components/DrawingContext';
 import DrawingOverlay from './components/DrawingOverlay';
+import { DrawingsUnderlayPrimitive } from './components/DrawingsUnderlayPrimitive';
 
 interface CandlestickChartProps {
     height?: number;
@@ -15,6 +16,11 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
     const futureTimeSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
     const lastFutureTimeRef = useRef<number>(0);
+    const candlestickDataRef = useRef<CandlestickData<Time>[]>([]);
+    const [candlestickDataVersion, setCandlestickDataVersion] = useState(0);
+    const underlayDataRef = useRef<{ drawings: Drawing[]; candlestickData: { time: number; open: number; high: number; low: number; close: number }[] }>({ drawings: [], candlestickData: [] });
+    const underlayRequestUpdateRef = useRef<{ requestUpdate: (() => void) | null }>({ requestUpdate: null });
+    const underlayPrimitiveRef = useRef<DrawingsUnderlayPrimitive | null>(null);
     const [chartApi, setChartApi] = useState<IChartApi | null>(null);
     const [seriesApi, setSeriesApi] = useState<ISeriesApi<'Candlestick'> | null>(null);
     // Note: we intentionally avoid covering the chart with a pointer-events layer during drawing,
@@ -75,6 +81,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     const horizontalPriceLinesRef = useRef<Map<string, any>>(new Map());
     const horizontalRayPriceLinesRef = useRef<Map<string, any>>(new Map());
     const longPositionPriceLinesRef = useRef<Map<string, any>>(new Map());
+    const shortPositionPriceLinesRef = useRef<Map<string, any>>(new Map());
 
     // Sync horizontal-line drawings to lightweight-charts price markers (right price scale)
     useEffect(() => {
@@ -299,6 +306,100 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         };
     }, [drawings, selectedDrawingId]);
 
+    // Sync short-position (RR box) drawings to lightweight-charts price markers (right price scale)
+    useEffect(() => {
+        const series = seriesRef.current as any;
+        if (!series || typeof series.createPriceLine !== 'function') return;
+
+        const map = shortPositionPriceLinesRef.current;
+
+        const shortPositions = drawings.filter(
+            (d) =>
+                d.type === 'short-position' &&
+                d.entryPrice != null &&
+                d.stopLoss != null &&
+                d.takeProfit != null
+        );
+
+        for (const [id, priceLine] of map.entries()) {
+            if (!shortPositions.some((d) => d.id === id.split(':')[0])) {
+                try {
+                    series.removePriceLine?.(priceLine);
+                } catch {
+                    // ignore
+                }
+                map.delete(id);
+            }
+        }
+
+        for (const d of shortPositions) {
+            const isSelected = selectedDrawingId === d.id;
+            const isHidden = !!d.hidden;
+
+            // Target (Take Profit - below entry for short) - Green
+            const targetId = `${d.id}:target`;
+            const targetColor = isHidden ? 'rgba(60, 174, 60, 0.5)' : isSelected ? '#3cae3c' : '#3cae3c';
+            const targetOptions: any = {
+                price: d.takeProfit,
+                color: targetColor,
+                lineWidth: 1,
+                lineStyle: 0,
+                axisLabelVisible: true,
+                title: '',
+                lineVisible: false,
+            };
+            let targetExisting = map.get(targetId);
+            if (!targetExisting) {
+                const pl = series.createPriceLine(targetOptions);
+                map.set(targetId, pl);
+            } else if (typeof targetExisting.applyOptions === 'function') {
+                targetExisting.applyOptions(targetOptions);
+            }
+
+            // Entry Price - Black
+            const entryId = `${d.id}:entry`;
+            const entryColor = isHidden ? 'rgba(0, 0, 0, 0.5)' : isSelected ? '#000000' : '#000000';
+            const entryOptions: any = {
+                price: d.entryPrice,
+                color: entryColor,
+                lineWidth: 1,
+                lineStyle: 0,
+                axisLabelVisible: true,
+                title: '',
+                lineVisible: false,
+            };
+            let entryExisting = map.get(entryId);
+            if (!entryExisting) {
+                const pl = series.createPriceLine(entryOptions);
+                map.set(entryId, pl);
+            } else if (typeof entryExisting.applyOptions === 'function') {
+                entryExisting.applyOptions(entryOptions);
+            }
+
+            // Stop Loss (above entry for short) - Red
+            const stopLossId = `${d.id}:stopLoss`;
+            const stopLossColor = isHidden ? 'rgba(212, 77, 77, 0.5)' : isSelected ? '#d44d4d' : '#d44d4d';
+            const stopLossOptions: any = {
+                price: d.stopLoss,
+                color: stopLossColor,
+                lineWidth: 1,
+                lineStyle: 0,
+                axisLabelVisible: true,
+                title: '',
+                lineVisible: false,
+            };
+            let stopLossExisting = map.get(stopLossId);
+            if (!stopLossExisting) {
+                const pl = series.createPriceLine(stopLossOptions);
+                map.set(stopLossId, pl);
+            } else if (typeof stopLossExisting.applyOptions === 'function') {
+                stopLossExisting.applyOptions(stopLossOptions);
+            }
+        }
+
+        return () => {};
+    }, [drawings, selectedDrawingId]);
+
     // Cleanup all price lines on unmount
     useEffect(() => {
         return () => {
@@ -333,6 +434,16 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 }
             }
             longPositionMap.clear();
+
+            const shortPositionMap = shortPositionPriceLinesRef.current;
+            for (const [, priceLine] of shortPositionMap.entries()) {
+                try {
+                    series.removePriceLine?.(priceLine);
+                } catch {
+                    // ignore
+                }
+            }
+            shortPositionMap.clear();
         };
     }, []);
 
@@ -433,7 +544,12 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         seriesRef.current = candleSeries;
         setChartApi(chart);
         setSeriesApi(candleSeries);
-        
+
+        // Primitive draws RR box + parallel channel above grid, behind candles
+        const primitive = new DrawingsUnderlayPrimitive(underlayDataRef as any, underlayRequestUpdateRef.current);
+        candleSeries.attachPrimitive(primitive);
+        underlayPrimitiveRef.current = primitive;
+
         const handleResize = () => {
             if (chartRef.current && containerRef.current) {
                 const containerHeight = containerRef.current.clientHeight || height;
@@ -444,10 +560,31 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         window.addEventListener('resize', handleResize);
 
         return () => {
+            if (underlayPrimitiveRef.current && seriesRef.current) {
+                try {
+                    seriesRef.current.detachPrimitive(underlayPrimitiveRef.current);
+                } catch (_) {}
+                underlayPrimitiveRef.current = null;
+            }
+            underlayRequestUpdateRef.current.requestUpdate = null;
             window.removeEventListener('resize', handleResize);
             chart.remove();
         };
     }, []);
+
+    // Sync underlay data and request redraw so primitive draws above grid, behind candles
+    useEffect(() => {
+        underlayDataRef.current.drawings = drawings;
+        const raw = candlestickDataRef.current ?? [];
+        underlayDataRef.current.candlestickData = raw.map((b) => ({
+            time: b.time as number,
+            open: b.open,
+            high: b.high,
+            low: b.low,
+            close: b.close,
+        }));
+        underlayRequestUpdateRef.current.requestUpdate?.();
+    }, [drawings, candlestickDataVersion]);
 
     // Crosshair style tuning:
     // - Dot mode: hide crosshair lines so the dot is clean (no cross over it)
@@ -518,6 +655,8 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         lastBarMinuteRef.current = currentMinuteTime;
 
         seriesRef.current.setData(initialData);
+        candlestickDataRef.current = [...initialData];
+        setCandlestickDataVersion((v) => v + 1);
 
         // Future timestamps only: invisible series so x-axis has labels all the way to the right border when scrolled
         const futureBarsCount = 600; // 10 hours (1-min bars)
@@ -580,13 +719,22 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             currentBarHighRef.current = high;
             currentBarLowRef.current = low;
 
-            seriesRef.current.update({
+            const barUpdate = {
                 time: currentMinute as UTCTimestamp,
                 open,
                 high,
                 low,
                 close,
-            });
+            };
+            seriesRef.current.update(barUpdate);
+            const data = candlestickDataRef.current;
+            const idx = data.findIndex((b) => (b.time as number) === currentMinute);
+            if (idx >= 0) {
+                data[idx] = barUpdate;
+            } else {
+                data.push(barUpdate);
+            }
+            setCandlestickDataVersion((v) => v + 1);
         }, 1000);
 
         return () => clearInterval(interval);
@@ -629,13 +777,13 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const handlePointerDown = (e: PointerEvent) => {
             const tool = activeToolRef.current;
-            if (tool !== 'lines' && tool !== 'ray' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position') return;
+            if (tool !== 'lines' && tool !== 'ray' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position' && tool !== 'short-position') return;
             const { x, y } = getLocalXY(e);
 
             const drawingId = `drawing-${Date.now()}`;
 
             if (tool === 'long-position') {
-                // One-click place RR box: 1% up/down, 10 bars width
+                // One-click place RR box: 1% up/down, 10 bars width (long: TP above, SL below)
                 const chart = chartRef.current;
                 const series = seriesRef.current;
                 if (!chart || !series) return;
@@ -644,17 +792,15 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const entryPrice = series.coordinateToPrice(y);
                 if (time == null || entryPrice == null) return;
 
-                // Calculate 1% up and down
                 const stopLoss = entryPrice * 0.99; // 1% down
                 const takeProfit = entryPrice * 1.01; // 1% up
 
-                // Calculate 10 bars width — use visible range when available, else fallback so box still creates
                 const visibleRange = chart.timeScale().getVisibleRange();
                 let timeRange: number;
                 if (visibleRange && typeof visibleRange.from === 'number' && typeof visibleRange.to === 'number') {
                     timeRange = visibleRange.to - visibleRange.from;
                 } else {
-                    timeRange = 60 * 10; // 10 bars of 1 minute
+                    timeRange = 60 * 10;
                 }
                 const estimatedBarWidth = Math.max(timeRange / 100, 60);
                 const tenBarsWidth = estimatedBarWidth * 10;
@@ -671,7 +817,49 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     style: { color: '#3b82f6', width: 2 },
                 });
 
-                // Immediately return to navigation mode (crosshair)
+                setActiveToolRefFn.current(null);
+                setCurrentDrawingRefFn.current(null);
+                setIsDrawingRefFn.current(false);
+                isDrawing = false;
+                currentDrawingRef = null;
+                return;
+            }
+
+            if (tool === 'short-position') {
+                // One-click place RR box for short: 1% up/down, 10 bars width (short: TP below, SL above)
+                const chart = chartRef.current;
+                const series = seriesRef.current;
+                if (!chart || !series) return;
+                
+                const time = chart.timeScale().coordinateToTime(x as any) as any;
+                const entryPrice = series.coordinateToPrice(y);
+                if (time == null || entryPrice == null) return;
+
+                const takeProfit = entryPrice * 0.99; // 1% down = profit for short
+                const stopLoss = entryPrice * 1.01; // 1% up = loss for short
+
+                const visibleRange = chart.timeScale().getVisibleRange();
+                let timeRange: number;
+                if (visibleRange && typeof visibleRange.from === 'number' && typeof visibleRange.to === 'number') {
+                    timeRange = visibleRange.to - visibleRange.from;
+                } else {
+                    timeRange = 60 * 10;
+                }
+                const estimatedBarWidth = Math.max(timeRange / 100, 60);
+                const tenBarsWidth = estimatedBarWidth * 10;
+                const endTime = time + tenBarsWidth;
+
+                addDrawingRefFn.current({
+                    id: drawingId,
+                    type: 'short-position',
+                    entryPrice,
+                    stopLoss,
+                    takeProfit,
+                    startTime: time,
+                    endTime,
+                    style: { color: '#3b82f6', width: 2 },
+                });
+
                 setActiveToolRefFn.current(null);
                 setCurrentDrawingRefFn.current(null);
                 setIsDrawingRefFn.current(false);
@@ -1106,7 +1294,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerDown = (e: PointerEvent) => {
             // If user is in a drawing tool, ignore selection logic
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position') return;
 
             const { x, y } = getLocalXY(e);
             const hoveredId = findHoveredHorizontalLineId(x, y);
@@ -1303,7 +1491,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerMove = (e: PointerEvent) => {
             // Don't do hover detection while a drawing tool is active
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position') return;
 
             const { x, y } = getLocalXY(e);
             const hoveredId = findHoveredHorizontalRayId(x, y);
@@ -1351,7 +1539,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerDown = (e: PointerEvent) => {
             // If user is in a drawing tool, ignore selection logic
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position') return;
 
             const { x, y } = getLocalXY(e);
             const hoveredId = findHoveredHorizontalRayId(x, y);
@@ -1410,7 +1598,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const startDrag = (e: PointerEvent) => {
             // don't interfere with drawing tools
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position') return;
             if (!hoveredHorizontalRayHandleId) return;
 
             const id = hoveredHorizontalRayHandleId;
@@ -1603,14 +1791,14 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return { boxX: Math.min(Number(startX), Number(endX)), boxWidth: Math.abs(Number(endX) - Number(startX)) };
         };
 
-        // Find which long-position (RR box) is being hovered (check if point is inside the box)
+        // Find which long-position or short-position (RR box) is being hovered (check if point is inside the box)
         const findHoveredLongPositionId = (localX: number, localY: number): string | null => {
             const series = seriesRef.current;
             const chart = chartRef.current;
             if (!series || !chart) return null;
 
             for (const d of drawings) {
-                if (d.type !== 'long-position') continue;
+                if (d.type !== 'long-position' && d.type !== 'short-position') continue;
                 if (d.hidden) continue;
                 if (d.entryPrice == null || d.stopLoss == null || d.takeProfit == null || d.startTime == null || d.endTime == null) continue;
 
@@ -1683,9 +1871,9 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             let bestHandle: string | null = null;
             let bestDist = Number.POSITIVE_INFINITY;
 
-            // Check long-position RR box handles first (use same box bounds as overlay)
+            // Check long-position / short-position RR box handles first (use same box bounds as overlay)
             for (const d of drawings) {
-                if (d.type === 'long-position' && d.entryPrice != null && d.stopLoss != null && d.takeProfit != null && d.startTime != null && d.endTime != null) {
+                if ((d.type === 'long-position' || d.type === 'short-position') && d.entryPrice != null && d.stopLoss != null && d.takeProfit != null && d.startTime != null && d.endTime != null) {
                     if (d.hidden) continue;
 
                     const boxBounds = getLongPositionBoxX(chart, d);
@@ -1697,14 +1885,13 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
                     if (entryY == null || stopLossY == null || takeProfitY == null) continue;
                     
-                    // Top-left square (for green/take profit area)
+                    // Top of box / bottom of box (same for long and short: topLeft = min(TP,SL), bottomLeft = max(TP,SL))
                     const topLeftX = boxX;
-                    const topLeftY = Math.min(takeProfitY, entryY);
+                    const topLeftY = Math.min(takeProfitY, stopLossY);
                     const distTopLeft = Math.sqrt((localX - topLeftX) ** 2 + (localY - topLeftY) ** 2);
                     
-                    // Bottom-left square (for red/stop loss area)
                     const bottomLeftX = boxX;
-                    const bottomLeftY = Math.max(stopLossY, entryY);
+                    const bottomLeftY = Math.max(takeProfitY, stopLossY);
                     const distBottomLeft = Math.sqrt((localX - bottomLeftX) ** 2 + (localY - bottomLeftY) ** 2);
                     
                     // Right-middle square (for width adjustment)
@@ -1816,7 +2003,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerMove = (e: PointerEvent) => {
             // Don't do hover detection while a drawing tool is active
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position') return;
 
             const { x, y } = getLocalXY(e);
 
@@ -1856,7 +2043,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerDown = (e: PointerEvent) => {
             // If user is in a drawing tool, ignore selection logic
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position') return;
 
             const { x, y } = getLocalXY(e);
             const handleId = findHoveredHandle(x, y);
@@ -1881,9 +2068,9 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     const target = e.target as HTMLElement;
                     if (!target.closest('[data-left-toolbar="true"]')) {
                         setSelectedLineId(null);
-                        // Only clear selectedDrawingId if it's currently a lines, ray, or long-position tool
+                        // Only clear selectedDrawingId if it's currently a lines, ray, long-position, or short-position tool
                         const currentSelected = drawings.find(d => d.id === selectedDrawingId);
-                        if (currentSelected?.type === 'lines' || currentSelected?.type === 'ray' || currentSelected?.type === 'long-position') {
+                        if (currentSelected?.type === 'lines' || currentSelected?.type === 'ray' || currentSelected?.type === 'long-position' || currentSelected?.type === 'short-position') {
                             setSelectedDrawingId(null);
                         }
                     }
@@ -2068,14 +2255,14 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return { boxX: Math.min(Number(startX), Number(endX)), boxWidth: Math.abs(Number(endX) - Number(startX)) };
         };
 
-        // Find which long-position (RR box) is being hovered (for startDrag body click)
+        // Find which long-position or short-position (RR box) is being hovered (for startDrag body click)
         const findHoveredLongPositionId = (localX: number, localY: number): string | null => {
             const series = seriesRef.current;
             const chart = chartRef.current;
             if (!series || !chart) return null;
 
             for (const d of drawings) {
-                if (d.type !== 'long-position') continue;
+                if (d.type !== 'long-position' && d.type !== 'short-position') continue;
                 if (d.hidden) continue;
                 if (d.entryPrice == null || d.stopLoss == null || d.takeProfit == null || d.startTime == null || d.endTime == null) continue;
 
@@ -2100,7 +2287,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const startDrag = (e: PointerEvent) => {
             // don't interfere with drawing tools
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position') return;
             
             const { x, y } = getLocalXY(e);
             const chart = chartRef.current;
@@ -2128,12 +2315,12 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 return;
             }
 
-            // Then check if clicking on a long-position RR box body (not a handle)
+            // Then check if clicking on a long-position or short-position RR box body (not a handle)
             const longPositionId = findHoveredLongPositionId(x, y);
             if (longPositionId) {
                 const targetDrawing = drawings.find((d) => d.id === longPositionId);
                 if (!targetDrawing || targetDrawing.locked) return;
-                if (targetDrawing.type !== 'long-position') return;
+                if (targetDrawing.type !== 'long-position' && targetDrawing.type !== 'short-position') return;
                 if (targetDrawing.entryPrice == null || targetDrawing.stopLoss == null || targetDrawing.takeProfit == null || targetDrawing.startTime == null || targetDrawing.endTime == null) return;
 
                 const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
@@ -2292,7 +2479,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             const series = seriesRef.current;
             if (!chart || !series) return;
 
-            // Handle long-position RR box body drag (moving entire box)
+            // Handle long-position / short-position RR box body drag (moving entire box)
             if (drag.handle === 'long-position-body') {
                 if (drag.initialClickTime == null || drag.initialClickPrice == null || 
                     drag.initialEntryPrice == null || drag.initialStopLoss == null ||
@@ -2303,13 +2490,11 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
 
-                // Calculate the offset from initial click position
                 const timeOffset = currentTime - drag.initialClickTime;
                 const priceOffset = currentPrice - drag.initialClickPrice;
 
-                // Move all prices and times by the offset
                 updateDrawing(drag.lineId, (prev) => {
-                    if (prev.type === 'long-position' && prev.entryPrice != null && prev.stopLoss != null && prev.takeProfit != null && prev.startTime != null && prev.endTime != null) {
+                    if ((prev.type === 'long-position' || prev.type === 'short-position') && prev.entryPrice != null && prev.stopLoss != null && prev.takeProfit != null && prev.startTime != null && prev.endTime != null) {
                         return {
                             ...prev,
                             entryPrice: drag.initialEntryPrice! + priceOffset,
@@ -2388,47 +2573,36 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 return;
             }
             
-            // Handle long-position RR box handles
+            // Handle long-position / short-position RR box handles
             if (drag.handle === 'top-left' || drag.handle === 'bottom-left' || drag.handle === 'right-middle' || drag.handle === 'left-middle') {
                 const chart = chartRef.current;
                 const series = seriesRef.current;
                 if (!chart || !series) return;
-                
+
                 updateDrawing(drag.lineId, (prev) => {
-                    if (prev.type === 'long-position' && prev.entryPrice != null && prev.stopLoss != null && prev.takeProfit != null && prev.startTime != null && prev.endTime != null) {
+                    if ((prev.type === 'long-position' || prev.type === 'short-position') && prev.entryPrice != null && prev.stopLoss != null && prev.takeProfit != null && prev.startTime != null && prev.endTime != null) {
                         if (drag.handle === 'top-left') {
-                            // Drag top-left: adjust take profit (green area height)
-                            const newTakeProfit = series.coordinateToPrice(y);
-                            if (newTakeProfit != null && newTakeProfit > prev.entryPrice) {
-                                return { ...prev, takeProfit: newTakeProfit };
-                            }
+                            // Long: top of box = take profit (green). Short: top of box = stop loss (red).
+                            const newPrice = series.coordinateToPrice(y);
+                            if (newPrice == null) return prev;
+                            if (prev.type === 'long-position' && newPrice > prev.entryPrice) return { ...prev, takeProfit: newPrice };
+                            if (prev.type === 'short-position' && newPrice > prev.entryPrice) return { ...prev, stopLoss: newPrice };
                         } else if (drag.handle === 'bottom-left') {
-                            // Drag bottom-left: adjust stop loss (red area height)
-                            const newStopLoss = series.coordinateToPrice(y);
-                            if (newStopLoss != null && newStopLoss < prev.entryPrice) {
-                                return { ...prev, stopLoss: newStopLoss };
-                            }
+                            // Long: bottom = stop loss (red). Short: bottom = take profit (green).
+                            const newPrice = series.coordinateToPrice(y);
+                            if (newPrice == null) return prev;
+                            if (prev.type === 'long-position' && newPrice < prev.entryPrice) return { ...prev, stopLoss: newPrice };
+                            if (prev.type === 'short-position' && newPrice < prev.entryPrice) return { ...prev, takeProfit: newPrice };
                         } else if (drag.handle === 'right-middle') {
-                            // Drag right-middle: adjust box width
                             const newEndTime = chart.timeScale().coordinateToTime(x as any) as any;
                             if (newEndTime != null && newEndTime > prev.startTime) {
                                 return { ...prev, endTime: newEndTime };
                             }
                         } else if (drag.handle === 'left-middle') {
-                            // Drag left-middle: adjust both startTime (horizontal) and entryPrice (vertical)
-                            // Keep uppermost green border (takeProfit) and lowermost red border (stopLoss) fixed
-                            // Only the entry price (black line) moves up/down, and width changes
                             const newStartTime = chart.timeScale().coordinateToTime(x as any) as any;
                             const newEntryPrice = series.coordinateToPrice(y);
-                            
                             if (newStartTime != null && newEntryPrice != null && newStartTime < prev.endTime) {
-                                // Keep takeProfit and stopLoss fixed, only update entryPrice and startTime
-                                return {
-                                    ...prev,
-                                    startTime: newStartTime,
-                                    entryPrice: newEntryPrice,
-                                    // takeProfit and stopLoss remain unchanged
-                                };
+                                return { ...prev, startTime: newStartTime, entryPrice: newEntryPrice };
                             }
                         }
                     }
@@ -2760,7 +2934,14 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     pointerEvents: 'none',
                 }}
             />
-            <DrawingOverlay chart={chartApi} series={seriesApi} containerRef={containerRef} />
+            <DrawingOverlay
+                chart={chartApi}
+                series={seriesApi}
+                containerRef={containerRef}
+                underlayIsPrimitive={true}
+                candlestickDataRef={candlestickDataRef as React.RefObject<Array<{ time: number; open: number; high: number; low: number; close: number }>>}
+                candlestickDataVersion={candlestickDataVersion}
+            />
         </div>
     );
 }
