@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useRef, ReactNode } from 'react';
 
-export type DrawingTool = 'lines' | 'ray' | 'trendline' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel' | 'long-position' | 'short-position' | 'fib' | 'brush' | 'text' | null;
+export type DrawingTool = 'lines' | 'ray' | 'trendline' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel' | 'long-position' | 'short-position' | 'price-range' | 'date-range' | 'fib' | 'brush' | 'text' | null;
 
 // Chart coordinates (time, price) - these stay constant regardless of zoom/pan
 export interface ChartPoint {
@@ -35,6 +35,9 @@ export interface Drawing {
 	locked?: boolean;
 	// For RR ratio label positioning (hysteresis)
 	lastRRSide?: 'green' | 'red'; // Track which side the label was last on
+	// For price-range (vertical measurer; uses startTime above)
+	startPrice?: number;
+	endPrice?: number;
 }
 
 interface DrawingContextType {

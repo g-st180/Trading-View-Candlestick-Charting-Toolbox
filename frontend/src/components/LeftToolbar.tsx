@@ -229,7 +229,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const [selectedLinesType, setSelectedLinesType] = useState<'lines' | 'ray' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel'>('lines');
 	const [showProjectionMenu, setShowProjectionMenu] = useState(false);
 	const [hoveredProjectionItemId, setHoveredProjectionItemId] = useState<string | null>(null);
-	const [selectedProjectionType, setSelectedProjectionType] = useState<'long-position' | 'short-position'>('long-position');
+	const [selectedProjectionType, setSelectedProjectionType] = useState<'long-position' | 'short-position' | 'price-range' | 'date-range'>('long-position');
 	const { activeTool, setActiveTool, selectedDrawingId, drawings, removeDrawing, updateDrawing, setSelectedDrawingId, setSelectedHorizontalLineId, setSelectedHorizontalRayId, setSelectedLineId } =
 		useDrawing();
 
@@ -245,7 +245,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel') {
 			setActiveToolId('lines');
 		}
-		if (activeTool === 'long-position' || activeTool === 'short-position') {
+		if (activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range') {
 			setActiveToolId('projection');
 		}
 	}, [activeTool]);
@@ -271,6 +271,10 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const projectionMenuItems: Array<{ id: string; label: string; icon: string }> = [
 		{ id: 'long-position', label: 'Long Position', icon: 'long-position' },
 		{ id: 'short-position', label: 'Short Position', icon: 'short-position' },
+	];
+	const measurerMenuItems: Array<{ id: string; label: string; icon: string }> = [
+		{ id: 'price-range', label: 'Price range', icon: 'price-range' },
+		{ id: 'date-range', label: 'Date range', icon: 'date-range' },
 	];
 
 	const renderButton = (tool: ToolButton) => {
@@ -492,13 +496,12 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							{projectionMenuItems.map((item) => {
 								const isSelected = selectedProjectionType === item.id;
 								const isHovered = hoveredProjectionItemId === item.id;
-
 								return (
 									<button
 										key={item.id}
 										type="button"
 										onClick={() => {
-											setSelectedProjectionType(item.id as 'long-position' | 'short-position');
+											setSelectedProjectionType(item.id as 'long-position' | 'short-position' | 'price-range' | 'date-range');
 											setActiveTool(item.id as any);
 											setShowProjectionMenu(false);
 										}}
@@ -506,9 +509,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										onMouseLeave={() => setHoveredProjectionItemId(null)}
 										className={[
 											'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
-											isSelected
-												? 'bg-slate-700 text-white'
-												: 'text-slate-900 hover:bg-transparent',
+											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
 										].join(' ')}
 									>
 										<span className="flex items-center gap-2">
@@ -521,13 +522,65 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 											{item.label}
 										</span>
 										{(isSelected || isHovered) && (
-											<svg
-												className={`h-4 w-4 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`}
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-												strokeWidth={2}
-											>
+											<svg className={`h-4 w-4 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+											</svg>
+										)}
+									</button>
+								);
+							})}
+							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-t border-slate-100 mt-1 pt-2">
+								Measurer
+							</div>
+							{measurerMenuItems.map((item) => {
+								const isSelected = selectedProjectionType === item.id;
+								const isHovered = hoveredProjectionItemId === item.id;
+								return (
+									<button
+										key={item.id}
+										type="button"
+										onClick={() => {
+											setSelectedProjectionType(item.id as 'long-position' | 'short-position' | 'price-range' | 'date-range');
+											setActiveTool(item.id as any);
+											setShowProjectionMenu(false);
+										}}
+										onMouseEnter={() => setHoveredProjectionItemId(item.id)}
+										onMouseLeave={() => setHoveredProjectionItemId(null)}
+										className={[
+											'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
+											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
+										].join(' ')}
+									>
+										<span className="flex items-center gap-2">
+											{item.icon === 'price-range' && (
+												<Icon className={`h-4 w-4 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.5}>
+													{/* Two horizontal parallel lines: top line, bottom line */}
+													<path d="M5 8h14" stroke="currentColor" strokeLinecap="round" />
+													<path d="M5 16h14" stroke="currentColor" strokeLinecap="round" />
+													{/* Bubble on right of top line */}
+													<circle cx="18" cy="8" r="2" fill="none" stroke="currentColor" />
+													{/* Bubble on left of bottom line */}
+													<circle cx="6" cy="16" r="2" fill="none" stroke="currentColor" />
+													{/* Vertical arrow from down to up in center */}
+													<path d="M12 20v-8M10 14l2-2 2 2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+												</Icon>
+											)}
+											{item.icon === 'date-range' && (
+												<Icon className={`h-4 w-4 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.5}>
+													{/* Date range: 90° from price range — two vertical parallel lines */}
+													<path d="M8 5v14" stroke="currentColor" strokeLinecap="round" />
+													<path d="M16 5v14" stroke="currentColor" strokeLinecap="round" />
+													{/* Bubble top of left line, bubble bottom of right line */}
+													<circle cx="8" cy="6" r="2" fill="none" stroke="currentColor" />
+													<circle cx="16" cy="18" r="2" fill="none" stroke="currentColor" />
+													{/* Horizontal arrow left to right in center */}
+													<path d="M4 12h8M14 10l2 2-2 2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+												</Icon>
+											)}
+											{item.label}
+										</span>
+										{(isSelected || isHovered) && (
+											<svg className={`h-4 w-4 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
 												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
 											</svg>
 										)}

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useDrawing, Drawing, ChartPoint } from './DrawingContext';
 import { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
 
-export type CandleBar = { time: number; open: number; high: number; low: number; close: number };
+export type CandleBar = { time: number; open: number; high: number; low: number; close: number; volume?: number };
 
 export interface DrawingOverlayProps {
 	chart: IChartApi | null;
@@ -10,11 +10,21 @@ export interface DrawingOverlayProps {
 	containerRef: React.RefObject<HTMLDivElement>;
 	/** When true, RR box and parallel channel are drawn by a series primitive (above grid, behind candles); overlay only draws handles/labels */
 	underlayIsPrimitive?: boolean;
-	candlestickDataRef?: React.RefObject<Array<{ time: number; open: number; high: number; low: number; close: number }>>;
+	candlestickDataRef?: React.RefObject<Array<{ time: number; open: number; high: number; low: number; close: number; volume?: number }>>;
 	candlestickDataVersion?: number;
+	/** Price-range: in-progress drawing id for smooth live preview */
+	priceRangeInProgressIdRef?: React.RefObject<string | null>;
+	priceRangeLiveEndPriceRef?: React.RefObject<number | null>;
+	priceRangeLiveEndTimeRef?: React.RefObject<number | null>;
+	priceRangeLiveTick?: number;
+	/** Date-range: in-progress drawing id for smooth live preview */
+	dateRangeInProgressIdRef?: React.RefObject<string | null>;
+	dateRangeLiveEndTimeRef?: React.RefObject<number | null>;
+	dateRangeLiveEndPriceRef?: React.RefObject<number | null>;
+	dateRangeLiveTick?: number;
 }
 
-export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0 }: DrawingOverlayProps) {
+export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0 }: DrawingOverlayProps) {
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const { drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, updateDrawing } = useDrawing();
 	const drawingsRef = useRef<Drawing[]>([]);
@@ -48,8 +58,9 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 		hoveredLineIdRef.current = hoveredLineId;
 		hoveredLineHandleIdRef.current = hoveredLineHandleId;
 		// Trigger a repaint whenever drawings or candle data change (for RR outcome dotted line).
+		// priceRangeLiveTick drives smooth price-range live preview.
 		scheduleRedrawRef.current?.();
-	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion]);
+	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick]);
 
 	useEffect(() => {
 		if (!canvasRef.current || !containerRef.current) return;
@@ -626,6 +637,291 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				ctx.restore();
 			}
 
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
+		// PRICE RANGE (measurer: dynamic rect in time+price, line arrow, two corner handles)
+		// Underlay (band, borders, arrow) drawn by primitive when underlayIsPrimitive; overlay does label + handles. When in progress, overlay draws full underlay for live preview.
+		// ============================================================================
+		if (drawing.type === 'price-range' && drawing.startTime != null && drawing.startPrice != null && chart && series) {
+			ctx.save();
+			const ts = chart.timeScale();
+			const isInProgress = priceRangeInProgressIdRef?.current === drawing.id;
+			const liveEndTime = isInProgress ? priceRangeLiveEndTimeRef?.current : null;
+			const liveEndPrice = isInProgress ? priceRangeLiveEndPriceRef?.current : null;
+			const endTime = liveEndTime ?? drawing.endTime ?? drawing.startTime;
+			const endPrice = liveEndPrice ?? drawing.endPrice ?? drawing.startPrice;
+			const startX = ts.timeToCoordinate(drawing.startTime as any);
+			const startY = series.priceToCoordinate(drawing.startPrice);
+			const endX = ts.timeToCoordinate(endTime as any);
+			const endY = series.priceToCoordinate(endPrice);
+			if (startX == null || startY == null || endX == null || endY == null) {
+				ctx.restore();
+				return;
+			}
+			const minX = Math.min(Number(startX), Number(endX));
+			const maxX = Math.max(Number(startX), Number(endX));
+			const minY = Math.min(startY, endY);
+			const maxY = Math.max(startY, endY);
+			const points = endPrice - drawing.startPrice;
+			const pct = drawing.startPrice !== 0 ? (points / drawing.startPrice) * 100 : 0;
+			const labelText = points === 0 && pct === 0
+				? '0.0 (0.00%)'
+				: `${points >= 0 ? '+' : ''}${points.toFixed(1)} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)`;
+
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+
+			// Draw band + borders + arrow on overlay only when not using primitive, or when in progress (live preview)
+			const drawUnderlayOnOverlay = !underlayIsPrimitive || isInProgress;
+			const borderWidth = 2;
+			const arrowWidth = 2.5;
+			const arrowLen = 7;
+			// Same perceived look when drawing and when done: use slightly lighter fill when in progress (overlay on top) so it doesn’t look dark
+			const fillOpacity = isInProgress ? 0.18 : 0.25;
+			const strokeColor = '#3b82f6';
+			if (drawUnderlayOnOverlay) {
+				ctx.fillStyle = `rgba(59, 130, 246, ${fillOpacity})`;
+				ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+				ctx.strokeStyle = strokeColor;
+				ctx.lineWidth = borderWidth;
+				ctx.lineCap = 'round';
+				ctx.beginPath();
+				ctx.moveTo(minX, minY);
+				ctx.lineTo(maxX, minY);
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.moveTo(minX, maxY);
+				ctx.lineTo(maxX, maxY);
+				ctx.stroke();
+				// Only draw arrow when band has enough height so arrow doesn't overlap
+				const bandHeight = maxY - minY;
+				const minHeightForArrow = 24;
+				if (bandHeight >= minHeightForArrow) {
+					const midX = (minX + maxX) / 2;
+					ctx.strokeStyle = strokeColor;
+					ctx.lineWidth = arrowWidth;
+					ctx.beginPath();
+					ctx.moveTo(midX, maxY);
+					ctx.lineTo(midX, minY);
+					ctx.stroke();
+					const endIsAbove = endY < startY;
+					if (endIsAbove) {
+						ctx.beginPath();
+						ctx.moveTo(midX, minY);
+						ctx.lineTo(midX - arrowLen * 0.6, minY + arrowLen);
+						ctx.moveTo(midX, minY);
+						ctx.lineTo(midX + arrowLen * 0.6, minY + arrowLen);
+						ctx.stroke();
+					} else {
+						ctx.beginPath();
+						ctx.moveTo(midX, maxY);
+						ctx.lineTo(midX - arrowLen * 0.6, maxY - arrowLen);
+						ctx.moveTo(midX, maxY);
+						ctx.lineTo(midX + arrowLen * 0.6, maxY - arrowLen);
+						ctx.stroke();
+					}
+				}
+			}
+
+			// White rectangular info block at center-bottom of rect
+			const padding = 6;
+			ctx.font = '12px sans-serif';
+			const textWidth = ctx.measureText(labelText).width;
+			const textHeight = 14;
+			const rectW = textWidth + padding * 2;
+			const rectH = textHeight + padding * 2;
+			const blockX = (minX + maxX) / 2 - rectW / 2;
+			const blockY = maxY + 8;
+			ctx.fillStyle = '#ffffff';
+			ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+			ctx.lineWidth = 1;
+			ctx.beginPath();
+			drawRoundedRect(ctx, blockX, blockY, rectW, rectH, 4);
+			ctx.fill();
+			ctx.stroke();
+			ctx.fillStyle = '#1e293b';
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			ctx.fillText(labelText, (minX + maxX) / 2, blockY + rectH / 2);
+
+			// Two white reposition dots: at start and end points (free handles, no min/max swap)
+			const shouldShowHandles = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
+			if (shouldShowHandles) {
+				const r = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = '#000000';
+				ctx.lineWidth = 1.5;
+				// Start point (first click)
+				ctx.beginPath();
+				ctx.arc(Number(startX), startY, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				// End point (second click)
+				ctx.beginPath();
+				ctx.arc(Number(endX), endY, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+			}
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
+		// DATE RANGE (horizontal measurer: dynamic rect in time+price, horizontal arrow, label: bars + duration Vol)
+		// ============================================================================
+		if (drawing.type === 'date-range' && drawing.startTime != null && drawing.startPrice != null && chart && series) {
+			ctx.save();
+			const ts = chart.timeScale();
+			const isInProgress = dateRangeInProgressIdRef?.current === drawing.id;
+			const liveEndTime = isInProgress ? dateRangeLiveEndTimeRef?.current : null;
+			const liveEndPrice = isInProgress ? dateRangeLiveEndPriceRef?.current : null;
+			const endTime = liveEndTime ?? drawing.endTime ?? drawing.startTime;
+			const endPrice = liveEndPrice ?? drawing.endPrice ?? drawing.startPrice;
+			const startX = ts.timeToCoordinate(drawing.startTime as any);
+			const startY = series.priceToCoordinate(drawing.startPrice);
+			const endX = ts.timeToCoordinate(endTime as any);
+			const endY = series.priceToCoordinate(endPrice);
+			if (startX == null || startY == null || endX == null || endY == null) {
+				ctx.restore();
+				return;
+			}
+			const minX = Math.min(Number(startX), Number(endX));
+			const maxX = Math.max(Number(startX), Number(endX));
+			const minY = Math.min(startY, endY);
+			const maxY = Math.max(startY, endY);
+
+			// Bar count: 1-minute timeframe
+			const barIntervalSeconds = 60;
+			const timeSpanSec = Math.max(0, (endTime as number) - (drawing.startTime as number));
+			const bars = Math.round(timeSpanSec / barIntervalSeconds);
+			const barsText = `${bars} bars`;
+
+			// Duration label: 1m..59m, then 1h, 1h 1m..1h 59m, 2h..23h 59m, then 1d, 1d 1m, etc.
+			const totalMinutes = Math.floor(timeSpanSec / 60);
+			let durationStr: string;
+			if (totalMinutes < 60) {
+				durationStr = totalMinutes <= 0 ? '0m' : `${totalMinutes}m`;
+			} else if (totalMinutes < 24 * 60) {
+				const hours = Math.floor(totalMinutes / 60);
+				const mins = totalMinutes % 60;
+				durationStr = mins === 0 ? `${hours}h` : `${hours}h ${mins}m`;
+			} else {
+				const days = Math.floor(totalMinutes / (24 * 60));
+				const rem = totalMinutes % (24 * 60);
+				const hours = Math.floor(rem / 60);
+				const mins = rem % 60;
+				const parts = [`${days}d`];
+				if (hours > 0) parts.push(`${hours}h`);
+				if (mins > 0) parts.push(`${mins}m`);
+				durationStr = parts.join(' ');
+			}
+
+			// Volume: sum of candles in range
+			const barsData = candlestickDataRef?.current ?? [];
+			let totalVol = 0;
+			const t0 = Math.min(drawing.startTime as number, endTime as number);
+			const t1 = Math.max(drawing.startTime as number, endTime as number);
+			for (const b of barsData) {
+				const t = b.time as number;
+				if (t >= t0 && t <= t1) totalVol += (b as CandleBar).volume ?? 0;
+			}
+			const volStr = totalVol >= 1000 ? `${(totalVol / 1000).toFixed(0)}k` : String(totalVol);
+			const volText = `${durationStr} Vol ${volStr}`;
+
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+
+			const drawUnderlayOnOverlay = !underlayIsPrimitive || isInProgress;
+			const borderWidth = 2;
+			const arrowWidth = 2.5;
+			const arrowLen = 7;
+			const fillOpacity = isInProgress ? 0.18 : 0.25;
+			const strokeColor = '#3b82f6';
+			if (drawUnderlayOnOverlay) {
+				ctx.fillStyle = `rgba(59, 130, 246, ${fillOpacity})`;
+				ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+				ctx.strokeStyle = strokeColor;
+				ctx.lineWidth = borderWidth;
+				ctx.lineCap = 'round';
+				ctx.beginPath();
+				ctx.moveTo(minX, minY);
+				ctx.lineTo(minX, maxY);
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.moveTo(maxX, minY);
+				ctx.lineTo(maxX, maxY);
+				ctx.stroke();
+				const bandWidth = maxX - minX;
+				const minWidthForArrow = 24;
+				if (bandWidth >= minWidthForArrow) {
+					const midY = (minY + maxY) / 2;
+					ctx.strokeStyle = strokeColor;
+					ctx.lineWidth = arrowWidth;
+					ctx.beginPath();
+					ctx.moveTo(minX, midY);
+					ctx.lineTo(maxX, midY);
+					ctx.stroke();
+					const endIsRight = (endTime as number) > (drawing.startTime as number);
+					if (endIsRight) {
+						ctx.beginPath();
+						ctx.moveTo(maxX, midY);
+						ctx.lineTo(maxX - arrowLen, midY - arrowLen * 0.6);
+						ctx.moveTo(maxX, midY);
+						ctx.lineTo(maxX - arrowLen, midY + arrowLen * 0.6);
+						ctx.stroke();
+					} else {
+						ctx.beginPath();
+						ctx.moveTo(minX, midY);
+						ctx.lineTo(minX + arrowLen, midY - arrowLen * 0.6);
+						ctx.moveTo(minX, midY);
+						ctx.lineTo(minX + arrowLen, midY + arrowLen * 0.6);
+						ctx.stroke();
+					}
+				}
+			}
+
+			const padding = 6;
+			ctx.font = '12px sans-serif';
+			const line1W = ctx.measureText(barsText).width;
+			const line2W = ctx.measureText(volText).width;
+			const textW = Math.max(line1W, line2W);
+			const rectW = textW + padding * 2;
+			const rectH = 14 * 2 + padding * 2;
+			const blockX = (minX + maxX) / 2 - rectW / 2;
+			const blockY = maxY + 8;
+			ctx.fillStyle = '#ffffff';
+			ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+			ctx.lineWidth = 1;
+			ctx.beginPath();
+			drawRoundedRect(ctx, blockX, blockY, rectW, rectH, 4);
+			ctx.fill();
+			ctx.stroke();
+			ctx.fillStyle = '#1e293b';
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			ctx.fillText(barsText, (minX + maxX) / 2, blockY + 14);
+			ctx.fillText(volText, (minX + maxX) / 2, blockY + 14 + 14);
+
+			const shouldShowHandles = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
+			if (shouldShowHandles) {
+				const r = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = '#000000';
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.arc(Number(startX), startY, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(Number(endX), endY, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+			}
 			ctx.restore();
 			return;
 		}

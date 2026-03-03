@@ -11,7 +11,7 @@ import type {
 import type { Drawing } from './DrawingContext';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 
-export type CandleBar = { time: number; open: number; high: number; low: number; close: number };
+export type CandleBar = { time: number; open: number; high: number; low: number; close: number; volume?: number };
 
 export interface UnderlayDataRef {
 	current: {
@@ -68,7 +68,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		if (!data) return;
 		const { drawings, candlestickData } = data;
 		const underlayDrawings = drawings.filter(
-			(d) => !d.hidden && (d.type === 'long-position' || d.type === 'short-position' || d.type === 'parallel-channel')
+			(d) => !d.hidden && (d.type === 'long-position' || d.type === 'short-position' || d.type === 'parallel-channel' || d.type === 'price-range' || d.type === 'date-range')
 		);
 		if (underlayDrawings.length === 0) return;
 
@@ -89,6 +89,10 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 						this._drawShortPosition(ctx, chart, series, drawing, candlestickData);
 					} else if (drawing.type === 'parallel-channel' && drawing.points && drawing.points.length >= 2) {
 						this._drawParallelChannel(ctx, chart, series, drawing);
+					} else if (drawing.type === 'price-range' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
+						this._drawPriceRange(ctx, chart, series, drawing);
+					} else if (drawing.type === 'date-range' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
+						this._drawDateRange(ctx, chart, series, drawing);
 					}
 				}
 			} finally {
@@ -422,6 +426,167 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 			ctx.moveTo(start.x, start.y);
 			ctx.lineTo(end.x, end.y);
 			ctx.stroke();
+			ctx.restore();
+		}
+	}
+
+	private _drawPriceRange(
+		ctx: CanvasRenderingContext2D,
+		chart: IChartApi,
+		series: ISeriesApi<'Candlestick'>,
+		drawing: Drawing
+	): void {
+		const ts = chart.timeScale();
+		const startX = ts.timeToCoordinate(drawing.startTime as any);
+		const startY = series.priceToCoordinate(drawing.startPrice!);
+		const endX = ts.timeToCoordinate(drawing.endTime as any);
+		const endY = series.priceToCoordinate(drawing.endPrice!);
+		if (startX == null || startY == null || endX == null || endY == null) return;
+		const minX = Math.min(Number(startX), Number(endX));
+		const maxX = Math.max(Number(startX), Number(endX));
+		const minY = Math.min(startY, endY);
+		const maxY = Math.max(startY, endY);
+		const isHidden = !!drawing.hidden;
+		const lineColor = isHidden ? 'rgba(59, 130, 246, 0.6)' : '#3b82f6';
+		const borderWidth = 2;
+		const arrowWidth = 2.5;
+		const arrowLen = 7;
+
+		ctx.save();
+		ctx.fillStyle = isHidden ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.25)';
+		ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+		ctx.restore();
+
+		ctx.save();
+		ctx.strokeStyle = lineColor;
+		ctx.lineWidth = borderWidth;
+		ctx.lineCap = 'round';
+		ctx.beginPath();
+		ctx.moveTo(minX, minY);
+		ctx.lineTo(maxX, minY);
+		ctx.stroke();
+		ctx.beginPath();
+		ctx.moveTo(minX, maxY);
+		ctx.lineTo(maxX, maxY);
+		ctx.stroke();
+		ctx.restore();
+
+		// Only draw arrow when band has enough height so arrow doesn't overlap
+		const bandHeight = maxY - minY;
+		const minHeightForArrow = 24;
+		if (bandHeight >= minHeightForArrow) {
+			const midX = (minX + maxX) / 2;
+			ctx.save();
+			ctx.strokeStyle = lineColor;
+			ctx.lineWidth = arrowWidth;
+			ctx.lineCap = 'round';
+			ctx.beginPath();
+			ctx.moveTo(midX, maxY);
+			ctx.lineTo(midX, minY);
+			ctx.stroke();
+			ctx.restore();
+
+			const endIsAbove = endY < startY;
+			ctx.save();
+			ctx.strokeStyle = lineColor;
+			ctx.lineWidth = arrowWidth;
+			ctx.lineCap = 'round';
+			ctx.lineJoin = 'round';
+			if (endIsAbove) {
+				ctx.beginPath();
+				ctx.moveTo(midX, minY);
+				ctx.lineTo(midX - arrowLen * 0.6, minY + arrowLen);
+				ctx.moveTo(midX, minY);
+				ctx.lineTo(midX + arrowLen * 0.6, minY + arrowLen);
+				ctx.stroke();
+			} else {
+				ctx.beginPath();
+				ctx.moveTo(midX, maxY);
+				ctx.lineTo(midX - arrowLen * 0.6, maxY - arrowLen);
+				ctx.moveTo(midX, maxY);
+				ctx.lineTo(midX + arrowLen * 0.6, maxY - arrowLen);
+				ctx.stroke();
+			}
+			ctx.restore();
+		}
+	}
+
+	private _drawDateRange(
+		ctx: CanvasRenderingContext2D,
+		chart: IChartApi,
+		series: ISeriesApi<'Candlestick'>,
+		drawing: Drawing
+	): void {
+		const ts = chart.timeScale();
+		const startX = ts.timeToCoordinate(drawing.startTime as any);
+		const startY = series.priceToCoordinate(drawing.startPrice!);
+		const endX = ts.timeToCoordinate(drawing.endTime as any);
+		const endY = series.priceToCoordinate(drawing.endPrice!);
+		if (startX == null || startY == null || endX == null || endY == null) return;
+		const minX = Math.min(Number(startX), Number(endX));
+		const maxX = Math.max(Number(startX), Number(endX));
+		const minY = Math.min(startY, endY);
+		const maxY = Math.max(startY, endY);
+		const isHidden = !!drawing.hidden;
+		const lineColor = isHidden ? 'rgba(59, 130, 246, 0.6)' : '#3b82f6';
+		const borderWidth = 2;
+		const arrowWidth = 2.5;
+		const arrowLen = 7;
+
+		ctx.save();
+		ctx.fillStyle = isHidden ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.25)';
+		ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+		ctx.restore();
+
+		ctx.save();
+		ctx.strokeStyle = lineColor;
+		ctx.lineWidth = borderWidth;
+		ctx.lineCap = 'round';
+		ctx.beginPath();
+		ctx.moveTo(minX, minY);
+		ctx.lineTo(minX, maxY);
+		ctx.stroke();
+		ctx.beginPath();
+		ctx.moveTo(maxX, minY);
+		ctx.lineTo(maxX, maxY);
+		ctx.stroke();
+		ctx.restore();
+
+		const bandWidth = maxX - minX;
+		const minWidthForArrow = 24;
+		if (bandWidth >= minWidthForArrow) {
+			const midY = (minY + maxY) / 2;
+			ctx.save();
+			ctx.strokeStyle = lineColor;
+			ctx.lineWidth = arrowWidth;
+			ctx.lineCap = 'round';
+			ctx.beginPath();
+			ctx.moveTo(minX, midY);
+			ctx.lineTo(maxX, midY);
+			ctx.stroke();
+			ctx.restore();
+
+			const endIsRight = (drawing.endTime as number) > (drawing.startTime as number);
+			ctx.save();
+			ctx.strokeStyle = lineColor;
+			ctx.lineWidth = arrowWidth;
+			ctx.lineCap = 'round';
+			ctx.lineJoin = 'round';
+			if (endIsRight) {
+				ctx.beginPath();
+				ctx.moveTo(maxX, midY);
+				ctx.lineTo(maxX - arrowLen, midY - arrowLen * 0.6);
+				ctx.moveTo(maxX, midY);
+				ctx.lineTo(maxX - arrowLen, midY + arrowLen * 0.6);
+				ctx.stroke();
+			} else {
+				ctx.beginPath();
+				ctx.moveTo(minX, midY);
+				ctx.lineTo(minX + arrowLen, midY - arrowLen * 0.6);
+				ctx.moveTo(minX, midY);
+				ctx.lineTo(minX + arrowLen, midY + arrowLen * 0.6);
+				ctx.stroke();
+			}
 			ctx.restore();
 		}
 	}
