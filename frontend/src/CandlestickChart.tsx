@@ -1054,7 +1054,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     type: tool, // 'lines', 'ray', or 'parallel-channel'
                     // chart-space points so it stays anchored to candles on pan/zoom
                     points: [startPt],
-                    style: { color: '#3b82f6', width: 3 },
+                    style: { color: '#3b82f6', width: 2 },
                 };
                 setCurrentDrawingRefFn.current(currentDrawingRef);
                 return;

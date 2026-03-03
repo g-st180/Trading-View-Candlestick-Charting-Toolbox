@@ -937,7 +937,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			ctx.clip();
 
 			ctx.strokeStyle = drawing.style?.color || '#3b82f6';
-			ctx.lineWidth = drawing.style?.width || 3;
+			ctx.lineWidth = drawing.style?.width || 2;
 			ctx.lineCap = 'round';
 			ctx.lineJoin = 'round';
 
@@ -947,7 +947,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			if ((drawing.type === 'lines' || drawing.type === 'ray') && pts.length === 1) {
 				const r = 5;
 				ctx.save();
-				ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 3) * 0.6);
+				ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 2) * 0.6);
 				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
 				ctx.fillStyle = '#ffffff';
 				ctx.beginPath();
@@ -1026,7 +1026,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				if (shouldShowBubbles) {
 					const r = 5;
 					ctx.save();
-					ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 3) * 0.6);
+					ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 2) * 0.6);
 					ctx.strokeStyle = drawing.style?.color || '#3b82f6';
 					ctx.fillStyle = '#ffffff';
 
@@ -1149,7 +1149,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			ctx.save();
 			ctx.fillStyle = '#ffffff';
 			ctx.strokeStyle = drawing.style?.color || '#3b82f6';
-			ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 3) * 0.6);
+			ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 2) * 0.6);
 			ctx.beginPath();
 			ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
 			ctx.fill();
@@ -1228,7 +1228,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 
 		ctx.save();
 		ctx.strokeStyle = drawing.style?.color || '#3b82f6';
-		const lineWidth = (drawing.type === 'lines' || drawing.type === 'ray') ? (drawing.style?.width || 3) : (drawing.style?.width || 2);
+		const lineWidth = drawing.style?.width ?? 2;
 		ctx.lineWidth = lineWidth;
 		ctx.lineCap = 'round';
 		ctx.lineJoin = 'round';
@@ -1327,7 +1327,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					const r = 5;
 					ctx.fillStyle = '#ffffff';
 					ctx.strokeStyle = drawing.style?.color || '#3b82f6';
-					ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 3) * 0.6);
+					ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 2) * 0.6);
 
 					// Check which handle is hovered for glow effect
 					const hoveredHandle = hoveredLineHandleIdRef.current;
@@ -1393,7 +1393,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				const r = 5;
 				ctx.fillStyle = '#ffffff';
 				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
-				ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 3) * 0.6);
+				ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 2) * 0.6);
 
 				// Check which handle is hovered for glow effect
 				const hoveredHandle = hoveredLineHandleIdRef.current;
