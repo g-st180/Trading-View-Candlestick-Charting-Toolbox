@@ -471,7 +471,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		ctx.stroke();
 		ctx.restore();
 
-		// Only draw arrow when band has enough height so arrow doesn't overlap
+		// Only draw arrow when band has enough height; full height from top to bottom border
 		const bandHeight = maxY - minY;
 		const minHeightForArrow = 24;
 		if (bandHeight >= minHeightForArrow) {
