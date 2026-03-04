@@ -1040,6 +1040,67 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 		}
 
 		// ============================================================================
+		// EMOJI: character in a box; imaginary boundary square + 4 corner handles when selected/hovered
+		// ============================================================================
+		if (drawing.type === 'emoji' && chart && series && drawing.emojiChar && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
+			const ts = chart.timeScale();
+			const minT = Math.min(drawing.startTime, drawing.endTime);
+			const maxT = Math.max(drawing.startTime, drawing.endTime);
+			const minP = Math.min(drawing.startPrice, drawing.endPrice);
+			const maxP = Math.max(drawing.startPrice, drawing.endPrice);
+			const minX = Number(ts.timeToCoordinate(minT as any));
+			const maxX = Number(ts.timeToCoordinate(maxT as any));
+			const topY = series.priceToCoordinate(maxP);
+			const bottomY = series.priceToCoordinate(minP);
+			if (minX == null || maxX == null || topY == null || bottomY == null) return;
+			const left = Math.min(minX, maxX);
+			const right = Math.max(minX, maxX);
+			const top = Math.min(topY, bottomY);
+			const bottom = Math.max(topY, bottomY);
+			const w = right - left;
+			const h = bottom - top;
+			const selected = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+			// Draw emoji character centered in box (font size from box height)
+			const fontSize = Math.max(12, Math.min(h * 0.85, w * 0.85));
+			ctx.font = `${fontSize}px sans-serif`;
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			ctx.fillStyle = '#000000';
+			ctx.fillText(drawing.emojiChar, (left + right) / 2, (top + bottom) / 2);
+			// When selected/hovered: draw boundary square + 4 corner handles
+			if (selected && w >= 1 && h >= 1) {
+				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
+				ctx.lineWidth = (drawing.style?.width || 2) * 0.8;
+				ctx.setLineDash([4, 4]);
+				ctx.strokeRect(left, top, w, h);
+				ctx.setLineDash([]);
+				const handleRadius = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
+				ctx.lineWidth = 1.5;
+				const hoveredHandle = hoveredLineHandleIdRef.current;
+				[['rect-corner-tl', left, top], ['rect-corner-tr', right, top], ['rect-corner-bl', left, bottom], ['rect-corner-br', right, bottom]].forEach(([handleId, x, y]) => {
+					ctx.save();
+					if (hoveredHandle === `${drawing.id}:${handleId}`) {
+						ctx.shadowColor = 'rgba(59, 130, 246, 0.9)';
+						ctx.shadowBlur = 8;
+					}
+					ctx.beginPath();
+					ctx.arc(x as number, y as number, handleRadius, 0, 2 * Math.PI);
+					ctx.fill();
+					ctx.stroke();
+					ctx.restore();
+				});
+			}
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
 		// CIRCLE: center (start) + radius point (end); two reposition bubbles (center + on circumference)
 		// ============================================================================
 		if (drawing.type === 'circle' && chart && series && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {

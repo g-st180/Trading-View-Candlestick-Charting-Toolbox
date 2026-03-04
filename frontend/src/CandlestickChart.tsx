@@ -61,7 +61,13 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         setHoveredHorizontalRayHandleId,
         selectedHorizontalRayId,
         setSelectedHorizontalRayId,
+        selectedEmoji,
     } = useDrawing();
+
+    const selectedEmojiRef = useRef<string | null>(null);
+    useEffect(() => {
+        selectedEmojiRef.current = selectedEmoji;
+    }, [selectedEmoji]);
 
     // Refs to avoid effect re-subscribing due to changing function identities from context
     const addDrawingRefFn = useRef(addDrawing);
@@ -818,12 +824,15 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return { x: e.clientX - rect.left, y: e.clientY - rect.top };
         };
 
+        // Use library conversion (smooth interpolation was breaking drawing; can revisit later with correct coord system)
+        const getTimeFromX = (ch: IChartApi, x: number): number | null => ch.timeScale().coordinateToTime(x as any) as number | null;
+
         const screenToChart = (x: number, y: number): ChartPoint | null => {
             const chart = chartRef.current;
             const series = seriesRef.current;
             if (!chart || !series) return null;
 
-            const t = chart.timeScale().coordinateToTime(x as any) as any;
+            const t = getTimeFromX(chart, x);
             const p = series.coordinateToPrice(y);
             if (t == null || p == null) return null;
 
@@ -834,7 +843,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const handlePointerDown = (e: PointerEvent) => {
             const tool = activeToolRef.current;
-            if (tool !== 'lines' && tool !== 'ray' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position' && tool !== 'short-position' && tool !== 'price-range' && tool !== 'date-range' && tool !== 'brush' && tool !== 'rectangle' && tool !== 'path' && tool !== 'circle') return;
+            if (tool !== 'lines' && tool !== 'ray' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position' && tool !== 'short-position' && tool !== 'price-range' && tool !== 'date-range' && tool !== 'brush' && tool !== 'rectangle' && tool !== 'path' && tool !== 'circle' && tool !== 'emoji') return;
             const { x, y } = getLocalXY(e);
 
             const drawingId = `drawing-${Date.now()}`;
@@ -860,13 +869,42 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 return;
             }
 
+            if (tool === 'emoji') {
+                e.preventDefault();
+                e.stopPropagation();
+                const chart = chartRef.current;
+                const series = seriesRef.current;
+                const emojiChar = selectedEmojiRef.current;
+                if (!chart || !series || !emojiChar) return;
+                const time = getTimeFromX(chart, x);
+                const price = series.coordinateToPrice(y);
+                if (time == null || price == null) return;
+                // Place emoji with default box: top-left at click, size ~2% price height, ~120s width
+                const priceDelta = Math.abs(price) * 0.02 || 1;
+                const endTime = time + 120;
+                const endPrice = price - priceDelta;
+                const emojiDrawing: Drawing = {
+                    id: drawingId,
+                    type: 'emoji',
+                    emojiChar,
+                    startTime: time,
+                    startPrice: price,
+                    endTime,
+                    endPrice,
+                    style: { color: '#3b82f6', width: 2 },
+                };
+                addDrawingRefFn.current(emojiDrawing);
+                setActiveToolRefFn.current(null);
+                return;
+            }
+
             if (tool === 'rectangle') {
                 e.preventDefault();
                 e.stopPropagation();
                 const chart = chartRef.current;
                 const series = seriesRef.current;
                 if (!chart || !series) return;
-                const time = chart.timeScale().coordinateToTime(x as any) as any;
+                const time = getTimeFromX(chart, x);
                 const price = series.coordinateToPrice(y);
                 if (time == null || price == null) return;
 
@@ -898,7 +936,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const chart = chartRef.current;
                 const series = seriesRef.current;
                 if (!chart || !series) return;
-                const time = chart.timeScale().coordinateToTime(x as any) as any;
+                const time = getTimeFromX(chart, x);
                 const price = series.coordinateToPrice(y);
                 if (time == null || price == null) return;
 
@@ -932,7 +970,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const chart = chartRef.current;
                 const series = seriesRef.current;
                 if (!chart || !series) return;
-                const time = chart.timeScale().coordinateToTime(x as any) as any;
+                const time = getTimeFromX(chart, x);
                 const price = series.coordinateToPrice(y);
                 if (time == null || price == null) return;
 
@@ -1003,7 +1041,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const series = seriesRef.current;
                 if (!chart || !series) return;
                 
-                const time = chart.timeScale().coordinateToTime(x as any) as any;
+                const time = getTimeFromX(chart, x);
                 const entryPrice = series.coordinateToPrice(y);
                 if (time == null || entryPrice == null) return;
 
@@ -1046,7 +1084,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const series = seriesRef.current;
                 if (!chart || !series) return;
                 
-                const time = chart.timeScale().coordinateToTime(x as any) as any;
+                const time = getTimeFromX(chart, x);
                 const entryPrice = series.coordinateToPrice(y);
                 if (time == null || entryPrice == null) return;
 
@@ -1087,7 +1125,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const chart = chartRef.current;
                 const series = seriesRef.current;
                 if (!chart || !series) return;
-                const time = chart.timeScale().coordinateToTime(x as any) as any;
+                const time = getTimeFromX(chart, x);
                 const price = series.coordinateToPrice(y);
                 if (time == null || price == null) return;
 
@@ -1129,7 +1167,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const chart = chartRef.current;
                 const series = seriesRef.current;
                 if (!chart || !series) return;
-                const time = chart.timeScale().coordinateToTime(x as any) as any;
+                const time = getTimeFromX(chart, x);
                 const price = series.coordinateToPrice(y);
                 if (time == null || price == null) return;
 
@@ -1194,7 +1232,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const series = seriesRef.current;
                 if (!chart || !series) return;
                 
-                const time = chart.timeScale().coordinateToTime(x as any) as any;
+                const time = getTimeFromX(chart, x);
                 const price = series.coordinateToPrice(y);
                 if (time == null || price == null) return;
 
@@ -1343,10 +1381,10 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     end2ScreenY = end1ScreenY + verticalOffset; // Vertical stretch
                 }
                 
-                // Convert back to chart coordinates
-                const start2Time = chart.timeScale().coordinateToTime(start2ScreenX as any) as any;
+                // Convert back to chart coordinates (smooth so preview doesn't jump)
+                const start2Time = getTimeFromX(chart, start2ScreenX);
                 const start2Price = series.coordinateToPrice(start2ScreenY);
-                const end2Time = chart.timeScale().coordinateToTime(end2ScreenX as any) as any;
+                const end2Time = getTimeFromX(chart, end2ScreenX);
                 const end2Price = series.coordinateToPrice(end2ScreenY);
                 
                 if (start2Time == null || start2Price == null || end2Time == null || end2Price == null) return;
@@ -1401,7 +1439,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const series = seriesRef.current;
                 if (chart && series) {
                     const { x, y } = getLocalXY(e);
-                    const endTime = chart.timeScale().coordinateToTime(x as any) as any;
+                    const endTime = getTimeFromX(chart, x);
                     const endPrice = series.coordinateToPrice(y);
                     if (endTime != null && endPrice != null) {
                         updateDrawingRefFn.current(rectangleId, (prev) => ({ ...prev, endTime, endPrice }));
@@ -1418,7 +1456,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const series = seriesRef.current;
                 if (chart && series) {
                     const { x, y } = getLocalXY(e);
-                    const endTime = chart.timeScale().coordinateToTime(x as any) as any;
+                    const endTime = getTimeFromX(chart, x);
                     const endPrice = series.coordinateToPrice(y);
                     if (endTime != null && endPrice != null) {
                         updateDrawingRefFn.current(circleId, (prev) => ({ ...prev, endTime, endPrice }));
@@ -1437,7 +1475,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const series = seriesRef.current;
                 if (chart && series) {
                     const { x, y } = getLocalXY(e);
-                    const endTime = chart.timeScale().coordinateToTime(x as any) as any;
+                    const endTime = getTimeFromX(chart, x);
                     const endPrice = series.coordinateToPrice(y);
                     if (endTime != null && endPrice != null) {
                         pathLiveEndTimeRef.current = endTime;
@@ -1453,7 +1491,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const series = seriesRef.current;
                 if (!chart || !series) return;
                 const { x, y } = getLocalXY(e);
-                const endTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const endTime = getTimeFromX(chart, x);
                 const endPrice = series.coordinateToPrice(y);
                 if (endTime != null && endPrice != null) {
                     priceRangeLiveEndTimeRef.current = endTime;
@@ -1469,7 +1507,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const series = seriesRef.current;
                 if (!chart || !series) return;
                 const { x, y } = getLocalXY(e);
-                const endTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const endTime = getTimeFromX(chart, x);
                 const endPrice = series.coordinateToPrice(y);
                 if (endTime != null && endPrice != null) {
                     dateRangeLiveEndTimeRef.current = endTime;
@@ -1532,10 +1570,10 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const end2ScreenX = end1ScreenX; // Same X (vertical border)
                 const end2ScreenY = end1ScreenY + verticalOffset; // Vertical stretch
                 
-                // Convert back to chart coordinates (only for storage, preview uses screenPoints)
-                const start2Time = chart.timeScale().coordinateToTime(start2ScreenX as any) as any;
+                // Convert back to chart coordinates (only for storage, preview uses screenPoints) (smooth to avoid jump)
+                const start2Time = getTimeFromX(chart, start2ScreenX);
                 const start2Price = series.coordinateToPrice(start2ScreenY);
-                const end2Time = chart.timeScale().coordinateToTime(end2ScreenX as any) as any;
+                const end2Time = getTimeFromX(chart, end2ScreenX);
                 const end2Price = series.coordinateToPrice(end2ScreenY);
                 
                 if (start2Time == null || start2Price == null || end2Time == null || end2Price == null) return;
@@ -2368,7 +2406,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             const series = seriesRef.current;
             if (!chart || !series) return null;
             for (const d of drawings) {
-                if (d.type !== 'rectangle' || d.hidden) continue;
+                if ((d.type !== 'rectangle' && d.type !== 'emoji') || d.hidden) continue;
                 if (d.startTime == null || d.startPrice == null || d.endTime == null || d.endPrice == null) continue;
                 const ts = chart.timeScale();
                 const minT = Math.min(d.startTime, d.endTime);
@@ -2522,6 +2560,30 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 if (distRight <= squareRadius && distRight < bestDist) { bestDist = distRight; bestHandle = `${d.id}:rect-edge-right`; }
                 if (distTop <= squareRadius && distTop < bestDist) { bestDist = distTop; bestHandle = `${d.id}:rect-edge-top`; }
                 if (distBottom <= squareRadius && distBottom < bestDist) { bestDist = distBottom; bestHandle = `${d.id}:rect-edge-bottom`; }
+            }
+
+            // Emoji: 4 corner handles only (same box math as rectangle)
+            for (const d of drawings) {
+                if (d.type !== 'emoji' || d.hidden) continue;
+                if (d.startTime == null || d.startPrice == null || d.endTime == null || d.endPrice == null) continue;
+                const ts = chart.timeScale();
+                const minT = Math.min(d.startTime, d.endTime);
+                const maxT = Math.max(d.startTime, d.endTime);
+                const minP = Math.min(d.startPrice, d.endPrice);
+                const maxP = Math.max(d.startPrice, d.endPrice);
+                const minX = Number(ts.timeToCoordinate(minT as any));
+                const maxX = Number(ts.timeToCoordinate(maxT as any));
+                const minY = series.priceToCoordinate(maxP);
+                const maxY = series.priceToCoordinate(minP);
+                if (minX == null || maxX == null || minY == null || maxY == null) continue;
+                const distTL = Math.hypot(localX - minX, localY - minY);
+                const distTR = Math.hypot(localX - maxX, localY - minY);
+                const distBL = Math.hypot(localX - minX, localY - maxY);
+                const distBR = Math.hypot(localX - maxX, localY - maxY);
+                if (distTL <= handleRadius && distTL < bestDist) { bestDist = distTL; bestHandle = `${d.id}:rect-corner-tl`; }
+                if (distTR <= handleRadius && distTR < bestDist) { bestDist = distTR; bestHandle = `${d.id}:rect-corner-tr`; }
+                if (distBL <= handleRadius && distBL < bestDist) { bestDist = distBL; bestHandle = `${d.id}:rect-corner-bl`; }
+                if (distBR <= handleRadius && distBR < bestDist) { bestDist = distBR; bestHandle = `${d.id}:rect-corner-br`; }
             }
 
             // Circle: center (start) + radius point (end)
@@ -2770,7 +2832,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerDown = (e: PointerEvent) => {
             // If user is in a drawing tool, ignore selection logic
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle' || activeTool === 'emoji') return;
 
             const { x, y } = getLocalXY(e);
             const handleId = findHoveredHandle(x, y);
@@ -2855,12 +2917,15 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return { x: e.clientX - rect.left, y: e.clientY - rect.top };
         };
 
+        // Use library conversion (same as drawing effect so behavior is consistent)
+        const getTimeFromX = (ch: IChartApi, x: number): number | null => ch.timeScale().coordinateToTime(x as any) as number | null;
+
         const screenToChart = (x: number, y: number): ChartPoint | null => {
             const chart = chartRef.current;
             const series = seriesRef.current;
             if (!chart || !series) return null;
 
-            const t = chart.timeScale().coordinateToTime(x as any) as any;
+            const t = getTimeFromX(chart, x);
             const p = series.coordinateToPrice(y);
             if (t == null || p == null) return null;
 
@@ -3116,7 +3181,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                         handle = 'path-vertex';
                     }
                 }
-                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickTime = getTimeFromX(chart, x);
                 const clickPrice = series.coordinateToPrice(y);
                 const base = pathVertexIndex !== undefined
                     ? { lineId, handle: 'path-vertex' as const, pathVertexIndex }
@@ -3148,7 +3213,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     setSelectedDrawingId(priceRangeBodyId);
                     return;
                 }
-                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickTime = getTimeFromX(chart, x);
                 const clickPrice = series.coordinateToPrice(y);
                 if (clickTime == null || clickPrice == null) return;
 
@@ -3211,7 +3276,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     setSelectedDrawingId(dateRangeBodyId);
                     return;
                 }
-                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickTime = getTimeFromX(chart, x);
                 const clickPrice = series.coordinateToPrice(y);
                 if (clickTime == null || clickPrice == null) return;
 
@@ -3257,7 +3322,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const chartPoints = (targetDrawing.points || []) as { time: number; price: number }[];
                 if (chartPoints.length < 2) return;
 
-                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickTime = getTimeFromX(chart, x);
                 const clickPrice = series.coordinateToPrice(y);
                 if (clickTime == null || clickPrice == null) return;
 
@@ -3292,7 +3357,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             // Click on rectangle body: start body drag (move whole rectangle in chart space)
             const findHoveredRectangleIdDrag = (localX: number, localY: number): string | null => {
                 for (const d of drawings) {
-                    if (d.type !== 'rectangle' || d.hidden) continue;
+                    if ((d.type !== 'rectangle' && d.type !== 'emoji') || d.hidden) continue;
                     if (d.startTime == null || d.startPrice == null || d.endTime == null || d.endPrice == null) continue;
                     const ts = chart.timeScale();
                     const minT = Math.min(d.startTime, d.endTime);
@@ -3314,12 +3379,12 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             if (rectangleBodyId) {
                 const targetDrawing = drawings.find((d) => d.id === rectangleBodyId);
                 if (!targetDrawing || targetDrawing.locked) return;
-                if (targetDrawing.type !== 'rectangle' || targetDrawing.startTime == null || targetDrawing.startPrice == null || targetDrawing.endTime == null || targetDrawing.endPrice == null) {
+                if ((targetDrawing.type !== 'rectangle' && targetDrawing.type !== 'emoji') || targetDrawing.startTime == null || targetDrawing.startPrice == null || targetDrawing.endTime == null || targetDrawing.endPrice == null) {
                     setSelectedLineId(rectangleBodyId);
                     setSelectedDrawingId(rectangleBodyId);
                     return;
                 }
-                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickTime = getTimeFromX(chart, x);
                 const clickPrice = series.coordinateToPrice(y);
                 if (clickTime == null || clickPrice == null) return;
 
@@ -3380,7 +3445,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     setSelectedDrawingId(circleBodyId);
                     return;
                 }
-                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickTime = getTimeFromX(chart, x);
                 const clickPrice = series.coordinateToPrice(y);
                 if (clickTime == null || clickPrice == null) return;
 
@@ -3459,7 +3524,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     setSelectedDrawingId(pathBodyId);
                     return;
                 }
-                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickTime = getTimeFromX(chart, x);
                 const clickPrice = series.coordinateToPrice(y);
                 if (clickTime == null || clickPrice == null) return;
 
@@ -3499,7 +3564,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 if (targetDrawing.type !== 'long-position' && targetDrawing.type !== 'short-position') return;
                 if (targetDrawing.entryPrice == null || targetDrawing.stopLoss == null || targetDrawing.takeProfit == null || targetDrawing.startTime == null || targetDrawing.endTime == null) return;
 
-                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickTime = getTimeFromX(chart, x);
                 const clickPrice = series.coordinateToPrice(y);
                 if (clickTime == null || clickPrice == null) return;
 
@@ -3544,7 +3609,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 if (targetDrawing.type !== 'parallel-channel') return;
                 if (!targetDrawing.points || targetDrawing.points.length < 4) return;
 
-                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickTime = getTimeFromX(chart, x);
                 const clickPrice = series.coordinateToPrice(y);
                 if (clickTime == null || clickPrice == null) return;
 
@@ -3593,7 +3658,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 if (targetDrawing.type !== 'lines' && targetDrawing.type !== 'ray') return;
                 if (!targetDrawing.points || targetDrawing.points.length < 2) return;
 
-                const clickTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const clickTime = getTimeFromX(chart, x);
                 const clickPrice = series.coordinateToPrice(y);
                 if (clickTime == null || clickPrice == null) return;
 
@@ -3662,7 +3727,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     drag.initialTakeProfit == null || drag.initialLongPositionStartTime == null ||
                     drag.initialLongPositionEndTime == null) return;
 
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
 
@@ -3691,7 +3756,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     drag.initialStartTime == null || drag.initialStartPrice == null ||
                     drag.initialEndTime == null || drag.initialEndPrice == null) return;
 
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
 
@@ -3719,7 +3784,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     drag.initialStartTime == null || drag.initialStartPrice == null ||
                     drag.initialEndTime == null || drag.initialEndPrice == null) return;
 
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
 
@@ -3744,7 +3809,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             // Handle brush stroke body drag (moving entire stroke in chart space)
             if (drag.handle === 'brush-body') {
                 if (drag.initialClickTime == null || drag.initialClickPrice == null || !drag.initialChartPoints?.length) return;
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
                 const deltaTime = currentTime - drag.initialClickTime;
@@ -3766,13 +3831,13 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 if (drag.initialClickTime == null || drag.initialClickPrice == null ||
                     drag.initialStartTime == null || drag.initialStartPrice == null ||
                     drag.initialEndTime == null || drag.initialEndPrice == null) return;
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
                 const timeOffset = currentTime - drag.initialClickTime;
                 const priceOffset = currentPrice - drag.initialClickPrice;
                 updateDrawing(drag.lineId, (prev) => {
-                    if (prev.type === 'rectangle') {
+                    if (prev.type === 'rectangle' || prev.type === 'emoji') {
                         return {
                             ...prev,
                             startTime: drag.initialStartTime! + timeOffset,
@@ -3791,7 +3856,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 if (drag.initialClickTime == null || drag.initialClickPrice == null ||
                     drag.initialStartTime == null || drag.initialStartPrice == null ||
                     drag.initialEndTime == null || drag.initialEndPrice == null) return;
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
                 const timeOffset = currentTime - drag.initialClickTime;
@@ -3814,7 +3879,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             // Handle circle center drag (move whole circle – same as body)
             if (drag.handle === 'circle-center') {
                 if (drag.initialClickTime == null || drag.initialClickPrice == null || drag.initialStartTime == null || drag.initialStartPrice == null || drag.initialEndTime == null || drag.initialEndPrice == null) return;
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
                 const timeOffset = currentTime - drag.initialClickTime;
@@ -3840,7 +3905,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
             // Handle circle radius drag (change radius only; center stays fixed)
             if (drag.handle === 'circle-radius') {
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
                 updateDrawing(drag.lineId, (prev) => {
@@ -3855,7 +3920,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             // Handle path body drag (moving entire path in chart space)
             if (drag.handle === 'path-body') {
                 if (drag.initialClickTime == null || drag.initialClickPrice == null || !drag.initialChartPoints?.length) return;
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
                 const deltaTime = currentTime - drag.initialClickTime;
@@ -3874,7 +3939,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
             // Handle path vertex drag (reposition one point)
             if (drag.handle === 'path-vertex' && drag.pathVertexIndex !== undefined) {
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
                 const idx = drag.pathVertexIndex;
@@ -3890,11 +3955,11 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             // Handle rectangle corner/edge resize
             const rectHandle = drag.handle as string;
             if (rectHandle.startsWith('rect-corner-') || rectHandle.startsWith('rect-edge-')) {
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
                 updateDrawing(drag.lineId, (prev) => {
-                    if (prev.type !== 'rectangle' || prev.startTime == null || prev.startPrice == null || prev.endTime == null || prev.endPrice == null) return prev;
+                    if ((prev.type !== 'rectangle' && prev.type !== 'emoji') || prev.startTime == null || prev.startPrice == null || prev.endTime == null || prev.endPrice == null) return prev;
                     const minT = Math.min(prev.startTime, prev.endTime);
                     const maxT = Math.max(prev.startTime, prev.endTime);
                     const minP = Math.min(prev.startPrice, prev.endPrice);
@@ -3922,7 +3987,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     drag.initialStart2Time == null || drag.initialStart2Price == null ||
                     drag.initialEnd2Time == null || drag.initialEnd2Price == null) return;
 
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
 
@@ -3954,7 +4019,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     drag.initialStartTime == null || drag.initialStartPrice == null ||
                     drag.initialEndTime == null || drag.initialEndPrice == null) return;
 
-                const currentTime = chart.timeScale().coordinateToTime(x as any) as any;
+                const currentTime = getTimeFromX(chart, x);
                 const currentPrice = series.coordinateToPrice(y);
                 if (currentTime == null || currentPrice == null) return;
 
@@ -3983,7 +4048,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const chart = chartRef.current;
                 const series = seriesRef.current;
                 if (!chart || !series) return;
-                const newT = chart.timeScale().coordinateToTime(x as any) as any;
+                const newT = getTimeFromX(chart, x);
                 const newP = series.coordinateToPrice(y);
                 if (newT == null || newP == null) return;
                 updateDrawing(drag.lineId, (prev) => {
@@ -4002,7 +4067,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 const chart = chartRef.current;
                 const series = seriesRef.current;
                 if (!chart || !series) return;
-                const newT = chart.timeScale().coordinateToTime(x as any) as any;
+                const newT = getTimeFromX(chart, x);
                 const newP = series.coordinateToPrice(y);
                 if (newT == null || newP == null) return;
                 updateDrawing(drag.lineId, (prev) => {
@@ -4037,12 +4102,12 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                             if (prev.type === 'long-position' && newPrice < prev.entryPrice) return { ...prev, stopLoss: newPrice };
                             if (prev.type === 'short-position' && newPrice < prev.entryPrice) return { ...prev, takeProfit: newPrice };
                         } else if (drag.handle === 'right-middle') {
-                            const newEndTime = chart.timeScale().coordinateToTime(x as any) as any;
+                            const newEndTime = getTimeFromX(chart, x);
                             if (newEndTime != null && newEndTime > prev.startTime) {
                                 return { ...prev, endTime: newEndTime };
                             }
                         } else if (drag.handle === 'left-middle') {
-                            const newStartTime = chart.timeScale().coordinateToTime(x as any) as any;
+                            const newStartTime = getTimeFromX(chart, x);
                             const newEntryPrice = series.coordinateToPrice(y);
                             if (newStartTime != null && newEntryPrice != null && newStartTime < prev.endTime) {
                                 return { ...prev, startTime: newStartTime, entryPrice: newEntryPrice };

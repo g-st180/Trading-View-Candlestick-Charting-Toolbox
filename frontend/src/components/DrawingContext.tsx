@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useRef, ReactNode } from 'react';
 
-export type DrawingTool = 'lines' | 'ray' | 'trendline' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel' | 'long-position' | 'short-position' | 'price-range' | 'date-range' | 'fib' | 'brush' | 'rectangle' | 'path' | 'circle' | 'text' | null;
+export type DrawingTool = 'lines' | 'ray' | 'trendline' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel' | 'long-position' | 'short-position' | 'price-range' | 'date-range' | 'fib' | 'brush' | 'rectangle' | 'path' | 'circle' | 'text' | 'emoji' | null;
 
 // Chart coordinates (time, price) - these stay constant regardless of zoom/pan
 export interface ChartPoint {
@@ -38,6 +38,8 @@ export interface Drawing {
 	// For price-range (vertical measurer; uses startTime above)
 	startPrice?: number;
 	endPrice?: number;
+	// For emoji: character to display; box from (startTime, startPrice) to (endTime, endPrice)
+	emojiChar?: string;
 }
 
 interface DrawingContextType {
@@ -76,6 +78,9 @@ interface DrawingContextType {
 	setHoveredLineHandleId: (id: string | null) => void;
 	selectedLineId: string | null;
 	setSelectedLineId: (id: string | null) => void;
+	// Emoji tool: currently selected emoji character for placement
+	selectedEmoji: string | null;
+	setSelectedEmoji: (emoji: string | null) => void;
 }
 
 const DrawingContext = createContext<DrawingContextType | undefined>(undefined);
@@ -100,6 +105,7 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
 	const [hoveredLineId, setHoveredLineId] = useState<string | null>(null);
 	const [hoveredLineHandleId, setHoveredLineHandleId] = useState<string | null>(null);
 	const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+	const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
 
 	const addDrawing = (drawing: Drawing) => {
 		setDrawings((prev) => [...prev, drawing]);
@@ -152,6 +158,8 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
 				setHoveredLineHandleId,
 				selectedLineId,
 				setSelectedLineId,
+				selectedEmoji,
+				setSelectedEmoji,
 			}}
 		>
 			{children}
