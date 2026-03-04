@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useDrawing } from './DrawingContext';
 
@@ -10,8 +10,8 @@ type ToolButton = {
 
 function Icon({
 	children,
-	className = 'h-6 w-6',
-	strokeWidth = 1.25,
+	className = 'h-7 w-7',
+	strokeWidth = 1,
 }: {
 	children: ReactNode;
 	className?: string;
@@ -39,7 +39,7 @@ const topTools: ToolButton[] = [
 		id: 'crosshair',
 		label: 'Crosshair',
 		icon: (
-			<Icon className="h-6 w-6" strokeWidth={1.05}>
+			<Icon className="h-7 w-7" strokeWidth={0.95}>
 				<path d="M12 3v6" />
 				<path d="M12 15v6" />
 				<path d="M3 12h6" />
@@ -53,8 +53,8 @@ const topTools: ToolButton[] = [
 		icon: (
 			<Icon>
 				<path d="M5 19L19 5" />
-				<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
-				<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+				<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+				<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 			</Icon>
 		),
 	},
@@ -63,22 +63,19 @@ const topTools: ToolButton[] = [
 		label: 'Projection',
 		icon: (
 			<Icon>
-				{/* RR box icon - rectangle with entry line */}
-				<rect x="4" y="6" width="16" height="12" fill="none" stroke="currentColor" strokeWidth={1.25} />
-				<path d="M4 12h16" stroke="currentColor" strokeWidth={1.25} strokeDasharray="2,2" />
+				{/* RR box icon - rectangle with entry line; full 4-20 bounds */}
+				<rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={1} />
+				<path d="M4 12h16" stroke="currentColor" strokeWidth={1} strokeDasharray="2,2" />
 			</Icon>
 		),
 	},
 	{
-		id: 'trendline',
-		label: 'Trend line',
+		id: 'shapes',
+		label: 'Shapes',
 		icon: (
 			<Icon>
-				<path d="M4 16l6-6 4 4 6-6" />
-				<circle cx="4" cy="16" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
-				<circle cx="10" cy="10" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
-				<circle cx="14" cy="14" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
-				<circle cx="20" cy="8" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+				<path d="M4 20c3 0 4-1 6-3" />
+				<path d="M10 17l8-8a3 3 0 10-4-4l-8 8" />
 			</Icon>
 		),
 	},
@@ -89,7 +86,7 @@ const topTools: ToolButton[] = [
 			<Icon>
 				{/* match Lines icon “box feel”: same default size + stroke; extend line closer to edges */}
 				<path d="M4 12L20 12" />
-				<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+				<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 			</Icon>
 		),
 	},
@@ -104,16 +101,6 @@ const topTools: ToolButton[] = [
 				<circle cx="10" cy="11" r="1.0" />
 				<circle cx="14" cy="7" r="1.0" />
 				<circle cx="18" cy="11" r="1.0" />
-			</Icon>
-		),
-	},
-	{
-		id: 'brush',
-		label: 'Brush',
-		icon: (
-			<Icon>
-				<path d="M4 20c3 0 4-1 6-3" />
-				<path d="M10 17l8-8a3 3 0 10-4-4l-8 8" />
 			</Icon>
 		),
 	},
@@ -221,6 +208,7 @@ interface LeftToolbarProps {
 }
 
 export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChange }: LeftToolbarProps) {
+	const toolbarRef = useRef<HTMLElement | null>(null);
 	const [activeToolId, setActiveToolId] = useState<string>('crosshair');
 	const [showCrosshairMenu, setShowCrosshairMenu] = useState(false);
 	const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
@@ -230,8 +218,29 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const [showProjectionMenu, setShowProjectionMenu] = useState(false);
 	const [hoveredProjectionItemId, setHoveredProjectionItemId] = useState<string | null>(null);
 	const [selectedProjectionType, setSelectedProjectionType] = useState<'long-position' | 'short-position' | 'price-range' | 'date-range'>('long-position');
+	const [showShapesMenu, setShowShapesMenu] = useState(false);
+	const [hoveredShapesItemId, setHoveredShapesItemId] = useState<string | null>(null);
+	const [selectedShapesType, setSelectedShapesType] = useState<'brush' | 'rectangle' | 'path' | 'circle'>('brush');
 	const { activeTool, setActiveTool, selectedDrawingId, drawings, removeDrawing, updateDrawing, setSelectedDrawingId, setSelectedHorizontalLineId, setSelectedHorizontalRayId, setSelectedLineId } =
 		useDrawing();
+
+	const closeAllMenus = () => {
+		setShowCrosshairMenu(false);
+		setShowProjectionMenu(false);
+		setShowShapesMenu(false);
+		setShowLinesMenu(false);
+	};
+
+	// Close menus when clicking outside the toolbar
+	useEffect(() => {
+		const handleClickOutside = (e: MouseEvent) => {
+			if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) {
+				closeAllMenus();
+			}
+		};
+		document.addEventListener('mousedown', handleClickOutside);
+		return () => document.removeEventListener('mousedown', handleClickOutside);
+	}, []);
 
 	// Keep toolbar highlight in sync with the actual active drawing tool.
 	// This makes the UI “snap back” to Cross immediately after tools like Horizontal Line auto-exit.
@@ -239,6 +248,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		if (activeTool === null) {
 			setActiveToolId('crosshair');
 			setShowLinesMenu(false);
+			setShowShapesMenu(false);
 			return;
 		}
 
@@ -247,6 +257,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		}
 		if (activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range') {
 			setActiveToolId('projection');
+		}
+		if (activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') {
+			setActiveToolId('shapes');
 		}
 	}, [activeTool]);
 
@@ -275,6 +288,15 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const measurerMenuItems: Array<{ id: string; label: string; icon: string }> = [
 		{ id: 'price-range', label: 'Price range', icon: 'price-range' },
 		{ id: 'date-range', label: 'Date range', icon: 'date-range' },
+	];
+
+	const brushesMenuItems: Array<{ id: string; label: string; icon: string }> = [
+		{ id: 'brush', label: 'Brush tool', icon: 'brush' },
+	];
+	const shapesSubMenuItems: Array<{ id: string; label: string; icon: string }> = [
+		{ id: 'rectangle', label: 'Rectangle', icon: 'rectangle' },
+		{ id: 'path', label: 'Path', icon: 'path' },
+		{ id: 'circle', label: 'Circle', icon: 'circle' },
 	];
 
 	const renderButton = (tool: ToolButton) => {
@@ -347,10 +369,6 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 				<div
 					key={tool.id}
 					className="relative"
-					onMouseLeave={() => {
-						// Keep menu open on click, close on mouse leave if not clicked
-						if (!showCrosshairMenu) return;
-					}}
 				>
 					<button
 						type="button"
@@ -363,10 +381,12 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 								: 'text-slate-900 hover:bg-slate-100 active:bg-slate-200',
 						].join(' ')}
 						onClick={() => {
-							// Crosshair is a navigation/tool-mode switch, not a drawing tool
+							setShowProjectionMenu(false);
+							setShowShapesMenu(false);
+							setShowLinesMenu(false);
 							setActiveToolId('crosshair');
 							setActiveTool(null);
-							setShowCrosshairMenu(!showCrosshairMenu);
+							setShowCrosshairMenu((v) => !v);
 						}}
 					>
 						{tool.icon}
@@ -375,8 +395,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 					{/* Dropdown menu */}
 					{showCrosshairMenu && (
 						<div
-							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[180px] z-50"
-							onMouseLeave={() => setShowCrosshairMenu(false)}
+							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[225px] z-50"
 						>
 							{crosshairMenuItems.map((item) => {
 								const isSelected = selectedCrosshairType === item.id;
@@ -410,7 +429,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 									>
 										<span className="flex items-center gap-2">
 											{item.icon === 'cross' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.05}>
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.05}>
 													<path d="M12 3v6" />
 													<path d="M12 15v6" />
 													<path d="M3 12h6" />
@@ -418,25 +437,25 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 												</Icon>
 											)}
 											{item.icon === 'arrow' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.7}>
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.2}>
 													<path d="M5 12h14" />
 													<path d="M12 5l7 7-7 7" />
 												</Icon>
 											)}
 											{item.icon === 'hline' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.7}>
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.2}>
 													<path d="M4 12h16" />
 												</Icon>
 											)}
 											{item.icon === 'demonstration' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.7}>
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.2}>
 													<circle cx="12" cy="12" r="10" />
 													<path d="M8 8l8 4-8 4V8z" />
 													<path d="M8 8l4 4" />
 												</Icon>
 											)}
 											{item.icon === 'eraser' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.7}>
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.2}>
 													<path d="M7 18l-4-4 8-8 4 4-8 8z" />
 													<path d="M11 10l4 4" />
 												</Icon>
@@ -445,11 +464,11 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										</span>
 										{(isSelected || isHovered) && (
 											<svg
-												className={`h-6 w-6 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`}
+												className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`}
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
-												strokeWidth={1.7}
+												strokeWidth={1.2}
 											>
 												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
 											</svg>
@@ -477,46 +496,53 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 								: 'text-slate-900 hover:bg-slate-100 active:bg-slate-200',
 						].join(' ')}
 						onClick={() => {
+							setShowCrosshairMenu(false);
+							setShowShapesMenu(false);
+							setShowLinesMenu(false);
 							setActiveToolId('projection');
 							setActiveTool(selectedProjectionType as any);
 							setShowProjectionMenu((v) => !v);
 						}}
 					>
 						{selectedProjectionType === 'long-position' ? (
-							<Icon className="h-6 w-6" strokeWidth={1.5}>
-								<path d="M4 6H20" stroke="currentColor" strokeLinecap="round" />
-								<path d="M4 12H20" stroke="currentColor" strokeLinecap="round" />
-								<path d="M4 18H20" stroke="currentColor" strokeLinecap="round" />
-								<path d="M4 18L20 6" stroke="currentColor" strokeDasharray="3 3" strokeLinecap="round" />
-								<circle cx="4" cy="18" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.5} />
-								<circle cx="20" cy="6" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.5} />
+							<Icon className="h-7 w-7" strokeWidth={1.15}>
+								<path d="M4 4H20" stroke="currentColor" strokeLinecap="round" />
+								<path d="M4 14H20" stroke="currentColor" strokeLinecap="round" />
+								<path d="M4 20H20" stroke="currentColor" strokeLinecap="round" />
+								<path d="M4 14L20 4" stroke="currentColor" strokeDasharray="1.2 2.4" strokeLinecap="round" />
+								<circle cx="4" cy="14" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+								<circle cx="20" cy="14" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+								<circle cx="4" cy="4" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+								<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
 							</Icon>
 						) : selectedProjectionType === 'short-position' ? (
-							<Icon className="h-6 w-6" strokeWidth={1.5}>
-								<path d="M4 6H20" stroke="currentColor" strokeLinecap="round" />
-								<path d="M4 12H20" stroke="currentColor" strokeLinecap="round" />
-								<path d="M4 18H20" stroke="currentColor" strokeLinecap="round" />
-								<path d="M4 6L20 18" stroke="currentColor" strokeDasharray="3 3" strokeLinecap="round" />
-								<circle cx="4" cy="6" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.5} />
-								<circle cx="20" cy="18" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.5} />
+							<Icon className="h-7 w-7" strokeWidth={1.15}>
+								<path d="M4 4H20" stroke="currentColor" strokeLinecap="round" />
+								<path d="M4 10H20" stroke="currentColor" strokeLinecap="round" />
+								<path d="M4 20H20" stroke="currentColor" strokeLinecap="round" />
+								<path d="M4 10L20 20" stroke="currentColor" strokeDasharray="1.2 2.4" strokeLinecap="round" />
+								<circle cx="4" cy="10" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+								<circle cx="20" cy="10" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+								<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+								<circle cx="4" cy="4" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
 							</Icon>
 						) : selectedProjectionType === 'price-range' ? (
-							<Icon className="h-6 w-6" strokeWidth={1.25}>
+							<Icon className="h-7 w-7" strokeWidth={1}>
 								<path d="M4 4h16" stroke="currentColor" strokeLinecap="round" />
 								<path d="M4 20h16" stroke="currentColor" strokeLinecap="round" />
-								<path d="M12 6v12" stroke="currentColor" strokeLinecap="round" />
-								<path d="M12 6l-1.2 1.5M12 6l1.2 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-								<circle cx="18" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
-								<circle cx="6" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+								<path d="M12 4v16" stroke="currentColor" strokeLinecap="round" />
+								<path d="M12 4l-1.2 1.5M12 4l1.2 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+								<circle cx="18" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+								<circle cx="6" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 							</Icon>
 						) : selectedProjectionType === 'date-range' ? (
-							<Icon className="h-6 w-6" strokeWidth={1.25}>
+							<Icon className="h-7 w-7" strokeWidth={1}>
 								<path d="M4 4v16" stroke="currentColor" strokeLinecap="round" />
 								<path d="M20 4v16" stroke="currentColor" strokeLinecap="round" />
-								<path d="M6 12h12" stroke="currentColor" strokeLinecap="round" />
-								<path d="M18 12l-1.5 1.2M18 12l-1.5 -1.2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-								<circle cx="4" cy="6" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
-								<circle cx="20" cy="18" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+								<path d="M4 12h16" stroke="currentColor" strokeLinecap="round" />
+								<path d="M20 12l-1.5 1.2M20 12l-1.5 -1.2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+								<circle cx="4" cy="6" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+								<circle cx="20" cy="18" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 							</Icon>
 						) : (
 							tool.icon
@@ -525,8 +551,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 
 					{showProjectionMenu && (
 						<div
-							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[180px] z-50"
-							onMouseLeave={() => setShowProjectionMenu(false)}
+							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[225px] z-50"
 						>
 							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
 								Projection
@@ -552,29 +577,33 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 									>
 										<span className="flex items-center gap-2">
 											{item.icon === 'long-position' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.5}>
-													<path d="M4 6H20" stroke="currentColor" strokeLinecap="round" />
-													<path d="M4 12H20" stroke="currentColor" strokeLinecap="round" />
-													<path d="M4 18H20" stroke="currentColor" strokeLinecap="round" />
-													<path d="M4 18L20 6" stroke="currentColor" strokeDasharray="3 3" strokeLinecap="round" />
-													<circle cx="4" cy="18" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.5} />
-													<circle cx="20" cy="6" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.5} />
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.15}>
+													<path d="M4 4H20" stroke="currentColor" strokeLinecap="round" />
+													<path d="M4 14H20" stroke="currentColor" strokeLinecap="round" />
+													<path d="M4 20H20" stroke="currentColor" strokeLinecap="round" />
+													<path d="M4 14L20 4" stroke="currentColor" strokeDasharray="1.2 2.4" strokeLinecap="round" />
+													<circle cx="4" cy="14" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+													<circle cx="20" cy="14" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+													<circle cx="4" cy="4" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+													<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
 												</Icon>
 											)}
 											{item.icon === 'short-position' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.5}>
-													<path d="M4 6H20" stroke="currentColor" strokeLinecap="round" />
-													<path d="M4 12H20" stroke="currentColor" strokeLinecap="round" />
-													<path d="M4 18H20" stroke="currentColor" strokeLinecap="round" />
-													<path d="M4 6L20 18" stroke="currentColor" strokeDasharray="3 3" strokeLinecap="round" />
-													<circle cx="4" cy="6" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.5} />
-													<circle cx="20" cy="18" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.5} />
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.15}>
+													<path d="M4 4H20" stroke="currentColor" strokeLinecap="round" />
+													<path d="M4 10H20" stroke="currentColor" strokeLinecap="round" />
+													<path d="M4 20H20" stroke="currentColor" strokeLinecap="round" />
+													<path d="M4 10L20 20" stroke="currentColor" strokeDasharray="1.2 2.4" strokeLinecap="round" />
+													<circle cx="4" cy="10" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+													<circle cx="20" cy="10" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+													<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
+													<circle cx="4" cy="4" r="1.5" fill="white" stroke="currentColor" strokeWidth={1.15} />
 												</Icon>
 											)}
 											{item.label}
 										</span>
 										{(isSelected || isHovered) && (
-											<svg className={`h-6 w-6 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.7}>
+											<svg className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.2}>
 												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
 											</svg>
 										)}
@@ -605,29 +634,189 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 									>
 										<span className="flex items-center gap-2">
 											{item.icon === 'price-range' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.25}>
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 													<path d="M4 4h16" stroke="currentColor" strokeLinecap="round" />
 													<path d="M4 20h16" stroke="currentColor" strokeLinecap="round" />
-													<path d="M12 6v12" stroke="currentColor" strokeLinecap="round" />
-													<path d="M12 6l-1.2 1.5M12 6l1.2 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-													<circle cx="18" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
-													<circle cx="6" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+													<path d="M12 4v16" stroke="currentColor" strokeLinecap="round" />
+													<path d="M12 4l-1.2 1.5M12 4l1.2 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+													<circle cx="18" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+													<circle cx="6" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 												</Icon>
 											)}
 											{item.icon === 'date-range' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.25}>
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 													<path d="M4 4v16" stroke="currentColor" strokeLinecap="round" />
 													<path d="M20 4v16" stroke="currentColor" strokeLinecap="round" />
-													<path d="M6 12h12" stroke="currentColor" strokeLinecap="round" />
-													<path d="M18 12l-1.5 1.2M18 12l-1.5 -1.2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
-													<circle cx="4" cy="6" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
-													<circle cx="20" cy="18" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+													<path d="M4 12h16" stroke="currentColor" strokeLinecap="round" />
+													<path d="M20 12l-1.5 1.2M20 12l-1.5 -1.2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+													<circle cx="4" cy="6" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+													<circle cx="20" cy="18" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 												</Icon>
 											)}
 											{item.label}
 										</span>
 										{(isSelected || isHovered) && (
-											<svg className={`h-6 w-6 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.7}>
+											<svg className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.2}>
+												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+											</svg>
+										)}
+									</button>
+								);
+							})}
+						</div>
+					)}
+				</div>
+			);
+		}
+
+		if (tool.id === 'shapes') {
+			return (
+				<div key={tool.id} className="relative">
+					<button
+						type="button"
+						aria-label={tool.label}
+						title={tool.label}
+						className={[
+							'h-10 w-10 grid place-items-center rounded-lg transition-colors',
+							activeToolId === 'shapes'
+								? 'text-blue-600'
+								: 'text-slate-900 hover:bg-slate-100 active:bg-slate-200',
+						].join(' ')}
+						onClick={() => {
+							setShowCrosshairMenu(false);
+							setShowProjectionMenu(false);
+							setShowLinesMenu(false);
+							setActiveToolId('shapes');
+							setActiveTool(selectedShapesType as any);
+							setShowShapesMenu((v) => !v);
+						}}
+					>
+						{selectedShapesType === 'brush' ? (
+							<Icon className="h-7 w-7" strokeWidth={1.05}>
+								<path d="M16.5 3.5a2.121 2.121 0 013 3L8 18l-4 1 1-4 11.5-11.5z" />
+								<line x1="14.5" y1="5.5" x2="18.5" y2="9.5" />
+							</Icon>
+						) : selectedShapesType === 'rectangle' ? (
+							<Icon className="h-7 w-7" strokeWidth={1}>
+								<rect x="4" y="4" width="16" height="16" rx="1" fill="none" stroke="currentColor" />
+								<circle cx="4" cy="4" r="1.6" fill="white" stroke="currentColor" />
+								<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" />
+								<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" />
+								<circle cx="20" cy="20" r="1.6" fill="white" stroke="currentColor" />
+							</Icon>
+						) : selectedShapesType === 'path' ? (
+							<Icon className="h-7 w-7" strokeWidth={1}>
+								<path d="M4 12L20 12" />
+								<circle cx="4" cy="12" r="1.6" fill="white" stroke="currentColor" />
+								<path d="M18 10.8L20 12L18 13.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+							</Icon>
+						) : selectedShapesType === 'circle' ? (
+							<Icon className="h-7 w-7" strokeWidth={1}>
+								<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" />
+								<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" />
+								<circle cx="20" cy="12" r="1.6" fill="white" stroke="currentColor" />
+							</Icon>
+						) : (
+							tool.icon
+						)}
+					</button>
+
+					{showShapesMenu && (
+						<div
+							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[225px] z-50"
+						>
+							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
+								Shapes
+							</div>
+							<div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider pt-2">
+								Brushes
+							</div>
+							{brushesMenuItems.map((item) => {
+								const isSelected = selectedShapesType === item.id;
+								const isHovered = hoveredShapesItemId === item.id;
+								return (
+									<button
+										key={item.id}
+										type="button"
+										onClick={() => {
+											setSelectedShapesType(item.id as 'brush' | 'rectangle' | 'path' | 'circle');
+											setActiveTool(item.id as any);
+											setShowShapesMenu(false);
+										}}
+										onMouseEnter={() => setHoveredShapesItemId(item.id)}
+										onMouseLeave={() => setHoveredShapesItemId(null)}
+										className={[
+											'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
+											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
+										].join(' ')}
+									>
+										<span className="flex items-center gap-2">
+											{item.icon === 'brush' && (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.05}>
+													<path d="M16.5 3.5a2.121 2.121 0 013 3L8 18l-4 1 1-4 11.5-11.5z" />
+													<line x1="14.5" y1="5.5" x2="18.5" y2="9.5" />
+												</Icon>
+											)}
+											{item.label}
+										</span>
+										{(isSelected || isHovered) && (
+											<svg className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.2}>
+												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+											</svg>
+										)}
+									</button>
+								);
+							})}
+							<div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider pt-2">
+								Shapes
+							</div>
+							{shapesSubMenuItems.map((item) => {
+								const isSelected = selectedShapesType === item.id;
+								const isHovered = hoveredShapesItemId === item.id;
+								return (
+									<button
+										key={item.id}
+										type="button"
+										onClick={() => {
+											setSelectedShapesType(item.id as 'brush' | 'rectangle' | 'path' | 'circle');
+											setActiveTool(item.id as any);
+											setShowShapesMenu(false);
+										}}
+										onMouseEnter={() => setHoveredShapesItemId(item.id)}
+										onMouseLeave={() => setHoveredShapesItemId(null)}
+										className={[
+											'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
+											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
+										].join(' ')}
+									>
+										<span className="flex items-center gap-2">
+											{item.icon === 'rectangle' && (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+													<rect x="4" y="4" width="16" height="16" rx="1" fill="none" stroke="currentColor" />
+													<circle cx="4" cy="4" r="1.6" fill="white" stroke="currentColor" />
+													<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" />
+													<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" />
+													<circle cx="20" cy="20" r="1.6" fill="white" stroke="currentColor" />
+												</Icon>
+											)}
+											{item.icon === 'path' && (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+													<path d="M4 12L20 12" />
+													<circle cx="4" cy="12" r="1.6" fill="white" stroke="currentColor" />
+													<path d="M18 10.8L20 12L18 13.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+												</Icon>
+											)}
+											{item.icon === 'circle' && (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+													<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" />
+													<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" />
+													<circle cx="20" cy="12" r="1.6" fill="white" stroke="currentColor" />
+												</Icon>
+											)}
+											{item.label}
+										</span>
+										{(isSelected || isHovered) && (
+											<svg className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.2}>
 												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
 											</svg>
 										)}
@@ -654,8 +843,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 								: 'text-slate-900 hover:bg-slate-100 active:bg-slate-200',
 						].join(' ')}
 						onClick={() => {
-							// Lines button: activate the currently selected line-type immediately,
-							// and also allow opening the selector menu.
+							setShowCrosshairMenu(false);
+							setShowProjectionMenu(false);
+							setShowShapesMenu(false);
 							setActiveToolId('lines');
 							setActiveTool(selectedLinesType as any);
 							setShowLinesMenu((v) => !v);
@@ -664,24 +854,24 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 						{selectedLinesType === 'horizontal-line' ? (
 							<Icon>
 								<path d="M4 12L20 12" />
-								<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+								<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 							</Icon>
 						) : selectedLinesType === 'horizontal-ray' ? (
 							<Icon>
 								<path d="M4 12L20 12" />
-								<circle cx="4" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+								<circle cx="4" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 							</Icon>
 						) : selectedLinesType === 'ray' ? (
 							<Icon>
 								<path d="M5 19L19 5" />
-								<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
-								<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+								<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+								<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 							</Icon>
 						) : selectedLinesType === 'parallel-channel' ? (
 							<Icon>
-								<path d="M4 18L20 6" stroke="currentColor" strokeWidth={1.25} />
-								<path d="M6 17L18 7" stroke="currentColor" strokeWidth={1.25} />
-								<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+								<path d="M4 18L20 6" stroke="currentColor" strokeWidth={1} />
+								<path d="M6 17L18 7" stroke="currentColor" strokeWidth={1} />
+								<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 							</Icon>
 						) : (
 							tool.icon
@@ -690,8 +880,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 
 					{showLinesMenu && (
 						<div
-							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[180px] z-50"
-							onMouseLeave={() => setShowLinesMenu(false)}
+							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[225px] z-50"
 						>
 							{/* Section Heading */}
 							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">
@@ -722,40 +911,40 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 									>
 										<span className="flex items-center gap-2">
 											{item.icon === 'ray' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.25}>
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 													<path d="M5 19L19 5" />
-													<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
-													<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+													<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+													<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 												</Icon>
 											)}
 											{item.icon === 'ray-line' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.25}>
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 													<path d="M5 19L19 5" />
-													<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
-													<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+													<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+													<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 												</Icon>
 											)}
 											{item.icon === 'hline' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.25}>
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 													<path d="M4 12L20 12" />
-													<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+													<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 												</Icon>
 											)}
 											{item.icon === 'hray' && (
-												<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.25}>
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 													<path d="M4 12L20 12" />
-													<circle cx="4" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+													<circle cx="4" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 												</Icon>
 											)}
 											{item.label}
 										</span>
 										{(isSelected || isHovered) && (
 											<svg
-												className={`h-6 w-6 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`}
+												className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`}
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
-												strokeWidth={1.7}
+												strokeWidth={1.2}
 											>
 												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
 											</svg>
@@ -795,21 +984,21 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 											>
 												<span className="flex items-center gap-2">
 													{item.icon === 'parallel-channel' && (
-														<Icon className={`h-6 w-6 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.25}>
+														<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 															<path d="M4 19L20 5" stroke="currentColor" />
 															<path d="M5 19L19 5" stroke="currentColor" />
-															<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1.25} />
+															<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 														</Icon>
 													)}
 													{item.label}
 												</span>
 												{(isSelected || isHovered) && (
 													<svg
-														className={`h-6 w-6 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`}
+														className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`}
 														fill="none"
 														stroke="currentColor"
 														viewBox="0 0 24 24"
-														strokeWidth={1.7}
+														strokeWidth={1.2}
 													>
 														<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
 													</svg>
@@ -840,7 +1029,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 				onClick={() => {
 					setActiveToolId(tool.id);
 					// Activate drawing tool if it's a drawing tool
-					if (tool.id === 'lines' || tool.id === 'trendline' || tool.id === 'horizontal-line' || tool.id === 'fib' || tool.id === 'brush') {
+					if (tool.id === 'lines' || tool.id === 'horizontal-line' || tool.id === 'fib') {
 						setActiveTool(tool.id as any);
 					} else {
 						setActiveTool(null);
@@ -854,20 +1043,21 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 
 	return (
 		<aside
+			ref={toolbarRef}
 			data-left-toolbar="true"
 			className="relative w-[60px] bg-white border-r border-slate-200 h-full flex flex-col items-center py-2"
 			aria-label="Chart tools"
 		>
-			<div className="flex flex-col items-center gap-0.5 px-2">{topTools.map(renderButton)}</div>
+			<div className="flex flex-col items-center gap-1 px-1.5">{topTools.map(renderButton)}</div>
 			<div className="w-full px-3 py-2">
 				<div className="h-px bg-slate-100" />
 			</div>
-			<div className="flex flex-col items-center gap-0.5 px-2">{midTools.map(renderButton)}</div>
+			<div className="flex flex-col items-center gap-1 px-1.5">{midTools.map(renderButton)}</div>
 			<div className="mt-auto w-full flex flex-col items-center gap-2">
 				<div className="w-full px-3">
 					<div className="h-px bg-slate-100" />
 				</div>
-				<div className="flex flex-col items-center gap-0.5 px-2 pb-2">{bottomTools.map(renderButton)}</div>
+				<div className="flex flex-col items-center gap-1 px-1.5 pb-2">{bottomTools.map(renderButton)}</div>
 			</div>
 
 			{/* Collapse handle placeholder */}

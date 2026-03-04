@@ -68,7 +68,11 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		if (!data) return;
 		const { drawings, candlestickData } = data;
 		const underlayDrawings = drawings.filter(
-			(d) => !d.hidden && (d.type === 'long-position' || d.type === 'short-position' || d.type === 'parallel-channel' || d.type === 'price-range' || d.type === 'date-range')
+			(d) => !d.hidden && (
+				d.type === 'long-position' || d.type === 'short-position' || d.type === 'parallel-channel' ||
+				d.type === 'price-range' || d.type === 'date-range' ||
+				d.type === 'lines' || d.type === 'ray' || d.type === 'horizontal-line' || d.type === 'horizontal-ray'
+			)
 		);
 		if (underlayDrawings.length === 0) return;
 
@@ -93,6 +97,14 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 						this._drawPriceRange(ctx, chart, series, drawing);
 					} else if (drawing.type === 'date-range' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
 						this._drawDateRange(ctx, chart, series, drawing);
+					} else if (drawing.type === 'lines' && drawing.points && drawing.points.length >= 2) {
+						this._drawLineSegment(ctx, chart, series, drawing, plotWidth, plotHeight);
+					} else if (drawing.type === 'ray' && drawing.points && drawing.points.length >= 2) {
+						this._drawRay(ctx, chart, series, drawing, plotWidth, plotHeight);
+					} else if (drawing.type === 'horizontal-line' && drawing.points && drawing.points.length >= 1) {
+						this._drawHorizontalLine(ctx, chart, series, drawing, plotWidth);
+					} else if (drawing.type === 'horizontal-ray' && drawing.points && drawing.points.length >= 1) {
+						this._drawHorizontalRay(ctx, chart, series, drawing, plotWidth);
 					}
 				}
 			} finally {
@@ -589,5 +601,153 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 			}
 			ctx.restore();
 		}
+	}
+
+	private _drawLineSegment(
+		ctx: CanvasRenderingContext2D,
+		chart: IChartApi,
+		series: ISeriesApi<'Candlestick'>,
+		drawing: Drawing,
+		_plotWidth: number,
+		_plotHeight: number
+	): void {
+		const pts = drawing.points!;
+		if (pts.length < 2) return;
+		const ts = chart.timeScale();
+		const toScreen = (p: { time: number; price: number }) => ({
+			x: Number(ts.timeToCoordinate(p.time as any)),
+			y: series.priceToCoordinate(p.price),
+		});
+		const [start, end] = pts.map(toScreen).filter((p) => p.x != null && p.y != null) as { x: number; y: number }[];
+		if (!start || !end) return;
+		const isHidden = !!drawing.hidden;
+		const lineColor = isHidden ? 'rgba(148, 163, 184, 0.9)' : (drawing.style?.color || '#3b82f6');
+		const lineWidth = isHidden ? 1 : (drawing.style?.width || 2);
+		ctx.save();
+		ctx.strokeStyle = lineColor;
+		ctx.lineWidth = lineWidth;
+		ctx.lineCap = 'round';
+		ctx.beginPath();
+		ctx.moveTo(start.x, start.y);
+		ctx.lineTo(end.x, end.y);
+		ctx.stroke();
+		ctx.restore();
+	}
+
+	private _drawRay(
+		ctx: CanvasRenderingContext2D,
+		chart: IChartApi,
+		series: ISeriesApi<'Candlestick'>,
+		drawing: Drawing,
+		plotWidth: number,
+		plotHeight: number
+	): void {
+		const pts = drawing.points!;
+		if (pts.length < 2) return;
+		const ts = chart.timeScale();
+		const toScreen = (p: { time: number; price: number }) => ({
+			x: Number(ts.timeToCoordinate(p.time as any)),
+			y: series.priceToCoordinate(p.price),
+		});
+		const screenPoints = pts.map(toScreen).filter((p) => p.x != null && p.y != null) as { x: number; y: number }[];
+		if (screenPoints.length < 2) return;
+		const start = screenPoints[0];
+		const end = screenPoints[1];
+		const dx = end.x - start.x;
+		const dy = end.y - start.y;
+		const length = Math.sqrt(dx * dx + dy * dy);
+		if (length === 0) return;
+		const unitX = dx / length;
+		const unitY = dy / length;
+		const intersections: { x: number; y: number; t: number }[] = [];
+		if (unitX < 0) {
+			const t = (0 - start.x) / unitX;
+			const y = start.y + unitY * t;
+			if (y >= 0 && y <= plotHeight) intersections.push({ x: 0, y, t });
+		}
+		if (unitX > 0) {
+			const t = (plotWidth - start.x) / unitX;
+			const y = start.y + unitY * t;
+			if (y >= 0 && y <= plotHeight) intersections.push({ x: plotWidth, y, t });
+		}
+		if (unitY < 0) {
+			const t = (0 - start.y) / unitY;
+			const x = start.x + unitX * t;
+			if (x >= 0 && x <= plotWidth) intersections.push({ x, y: 0, t });
+		}
+		if (unitY > 0) {
+			const t = (plotHeight - start.y) / unitY;
+			const x = start.x + unitX * t;
+			if (x >= 0 && x <= plotWidth) intersections.push({ x, y: plotHeight, t });
+		}
+		let finalX = end.x;
+		let finalY = end.y;
+		if (intersections.length > 0) {
+			const furthest = intersections.reduce((prev, curr) => (curr.t > prev.t ? curr : prev));
+			finalX = furthest.x;
+			finalY = furthest.y;
+		}
+		const isHidden = !!drawing.hidden;
+		const lineColor = isHidden ? 'rgba(148, 163, 184, 0.9)' : (drawing.style?.color || '#3b82f6');
+		const lineWidth = isHidden ? 1 : (drawing.style?.width || 2);
+		ctx.save();
+		ctx.strokeStyle = lineColor;
+		ctx.lineWidth = lineWidth;
+		ctx.lineCap = 'round';
+		ctx.beginPath();
+		ctx.moveTo(start.x, start.y);
+		ctx.lineTo(finalX, finalY);
+		ctx.stroke();
+		ctx.restore();
+	}
+
+	private _drawHorizontalLine(
+		ctx: CanvasRenderingContext2D,
+		_chart: IChartApi,
+		series: ISeriesApi<'Candlestick'>,
+		drawing: Drawing,
+		plotWidth: number
+	): void {
+		const price = drawing.points![0].price;
+		const y = series.priceToCoordinate(price);
+		if (y == null) return;
+		const isHidden = !!drawing.hidden;
+		const lineColor = isHidden ? 'rgba(148, 163, 184, 0.9)' : (drawing.style?.color || '#3b82f6');
+		const lineWidth = isHidden ? 1 : (drawing.style?.width || 2);
+		ctx.save();
+		ctx.strokeStyle = lineColor;
+		ctx.lineWidth = lineWidth;
+		ctx.lineCap = 'round';
+		ctx.beginPath();
+		ctx.moveTo(0, y);
+		ctx.lineTo(plotWidth, y);
+		ctx.stroke();
+		ctx.restore();
+	}
+
+	private _drawHorizontalRay(
+		ctx: CanvasRenderingContext2D,
+		chart: IChartApi,
+		series: ISeriesApi<'Candlestick'>,
+		drawing: Drawing,
+		plotWidth: number
+	): void {
+		const point = drawing.points![0];
+		const startX = chart.timeScale().timeToCoordinate(point.time as any);
+		const y = series.priceToCoordinate(point.price);
+		if (startX == null || y == null) return;
+		const sx = Number(startX);
+		const isHidden = !!drawing.hidden;
+		const lineColor = isHidden ? 'rgba(148, 163, 184, 0.9)' : (drawing.style?.color || '#3b82f6');
+		const lineWidth = isHidden ? 1 : (drawing.style?.width || 2);
+		ctx.save();
+		ctx.strokeStyle = lineColor;
+		ctx.lineWidth = lineWidth;
+		ctx.lineCap = 'round';
+		ctx.beginPath();
+		ctx.moveTo(sx, y);
+		ctx.lineTo(plotWidth, y);
+		ctx.stroke();
+		ctx.restore();
 	}
 }

@@ -22,9 +22,22 @@ export interface DrawingOverlayProps {
 	dateRangeLiveEndTimeRef?: React.RefObject<number | null>;
 	dateRangeLiveEndPriceRef?: React.RefObject<number | null>;
 	dateRangeLiveTick?: number;
+	/** Rectangle: in-progress drawing id for live preview (click then drag) */
+	rectangleInProgressIdRef?: React.RefObject<string | null>;
+	rectangleLiveTick?: number;
+	/** Path: in-progress drawing id + live end for arrow preview */
+	pathInProgressIdRef?: React.RefObject<string | null>;
+	pathLiveEndTimeRef?: React.RefObject<number | null>;
+	pathLiveEndPriceRef?: React.RefObject<number | null>;
+	pathLiveTick?: number;
+	/** Circle: in-progress drawing id + live radius point for preview */
+	circleInProgressIdRef?: React.RefObject<string | null>;
+	circleLiveEndTimeRef?: React.RefObject<number | null>;
+	circleLiveEndPriceRef?: React.RefObject<number | null>;
+	circleLiveTick?: number;
 }
 
-export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0 }: DrawingOverlayProps) {
+export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0, rectangleInProgressIdRef, rectangleLiveTick = 0, pathInProgressIdRef, pathLiveEndTimeRef, pathLiveEndPriceRef, pathLiveTick = 0, circleInProgressIdRef, circleLiveEndTimeRef, circleLiveEndPriceRef, circleLiveTick = 0 }: DrawingOverlayProps) {
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const { drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, updateDrawing } = useDrawing();
 	const drawingsRef = useRef<Drawing[]>([]);
@@ -60,7 +73,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 		// Trigger a repaint whenever drawings or candle data change (for RR outcome dotted line).
 		// priceRangeLiveTick drives smooth price-range live preview.
 		scheduleRedrawRef.current?.();
-	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick]);
+	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, rectangleLiveTick, pathLiveTick, circleLiveTick]);
 
 	useEffect(() => {
 		if (!canvasRef.current || !containerRef.current) return;
@@ -926,9 +939,320 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			return;
 		}
 
+		// ============================================================================
+		// RECTANGLE: chart-space rect; 4 corner bubbles + 4 square edge handles when selected or in progress
+		// ============================================================================
+		if (drawing.type === 'rectangle' && chart && series && drawing.startTime != null && drawing.startPrice != null) {
+			const endT = drawing.endTime ?? drawing.startTime;
+			const endP = drawing.endPrice ?? drawing.startPrice;
+			const ts = chart.timeScale();
+			const minT = Math.min(drawing.startTime, endT);
+			const maxT = Math.max(drawing.startTime, endT);
+			const minP = Math.min(drawing.startPrice, endP);
+			const maxP = Math.max(drawing.startPrice, endP);
+			const minX = Number(ts.timeToCoordinate(minT as any));
+			const maxX = Number(ts.timeToCoordinate(maxT as any));
+			const topY = series.priceToCoordinate(maxP);
+			const bottomY = series.priceToCoordinate(minP);
+			if (minX == null || maxX == null || topY == null || bottomY == null) return;
+			const left = Math.min(minX, maxX);
+			const right = Math.max(minX, maxX);
+			const top = Math.min(topY, bottomY);
+			const bottom = Math.max(topY, bottomY);
+			const isInProgress = rectangleInProgressIdRef?.current === drawing.id;
+			const selected = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
+			const showHandles = selected || isInProgress;
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+			ctx.strokeStyle = drawing.style?.color || '#3b82f6';
+			ctx.lineWidth = drawing.style?.width || 2;
+			const w = right - left;
+			const h = bottom - top;
+			if (w >= 1 && h >= 1) {
+				const fillOpacity = isInProgress ? 0.18 : 0.25;
+				ctx.fillStyle = `rgba(59, 130, 246, ${fillOpacity})`;
+				ctx.fillRect(left, top, w, h);
+				ctx.strokeRect(left, top, w, h);
+			} else {
+				// Degenerate or first click: draw at least one bubble so user sees something
+				const r = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.arc(left, top, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+			}
+			if (showHandles) {
+				const handleRadius = 5;
+				const squareSize = 11;
+				const borderRadius = 3;
+				const midX = (left + right) / 2;
+				const midY = (top + bottom) / 2;
+				const hoveredHandle = hoveredLineHandleIdRef.current;
+				const sq2 = squareSize / 2;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
+				ctx.lineWidth = 1.5;
+				// 4 corner circles (reposition)
+				ctx.beginPath();
+				ctx.arc(left, top, handleRadius, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(right, top, handleRadius, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(left, bottom, handleRadius, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(right, bottom, handleRadius, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				// 4 edge-center squares (resize width/height) – same style as horizontal line
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = '#000000';
+				ctx.lineWidth = 1.5;
+				const drawRectEdgeSquare = (x: number, y: number, handleId: string) => {
+					ctx.save();
+					if (hoveredHandle === `${drawing.id}:${handleId}`) {
+						ctx.shadowColor = 'rgba(59, 130, 246, 0.9)';
+						ctx.shadowBlur = 8;
+					}
+					ctx.beginPath();
+					drawRoundedRect(ctx, x - sq2, y - sq2, squareSize, squareSize, borderRadius);
+					ctx.fill();
+					ctx.stroke();
+					ctx.restore();
+				};
+				drawRectEdgeSquare(left, midY, 'rect-edge-left');
+				drawRectEdgeSquare(right, midY, 'rect-edge-right');
+				drawRectEdgeSquare(midX, top, 'rect-edge-top');
+				drawRectEdgeSquare(midX, bottom, 'rect-edge-bottom');
+			}
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
+		// CIRCLE: center (start) + radius point (end); two reposition bubbles (center + on circumference)
+		// ============================================================================
+		if (drawing.type === 'circle' && chart && series && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
+			const ts = chart.timeScale();
+			const cx = Number(ts.timeToCoordinate(drawing.startTime as any));
+			const cy = series.priceToCoordinate(drawing.startPrice);
+			let rx = Number(ts.timeToCoordinate(drawing.endTime as any));
+			let ry = series.priceToCoordinate(drawing.endPrice);
+			const isInProgress = circleInProgressIdRef?.current === drawing.id;
+			if (isInProgress && circleLiveEndTimeRef?.current != null && circleLiveEndPriceRef?.current != null) {
+				rx = Number(ts.timeToCoordinate(circleLiveEndTimeRef.current as any));
+				ry = series.priceToCoordinate(circleLiveEndPriceRef.current);
+			}
+			if (cx == null || cy == null || rx == null || ry == null) return;
+			const R = Math.hypot(rx - cx, ry - cy);
+			const strokeColor = drawing.style?.color || '#3b82f6';
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+			ctx.strokeStyle = strokeColor;
+			ctx.lineWidth = drawing.style?.width || 2;
+			if (R >= 1) {
+				const fillOpacity = isInProgress ? 0.18 : 0.25;
+				ctx.fillStyle = `rgba(59, 130, 246, ${fillOpacity})`;
+				ctx.beginPath();
+				ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+			} else {
+				const r = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = strokeColor;
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+			}
+			const selected = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
+			const showHandles = selected || isInProgress;
+			if (showHandles) {
+				const handleRadius = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = strokeColor;
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.arc(cx, cy, handleRadius, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(rx, ry, handleRadius, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+			}
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
+		// PATH: chart-space polyline; click to add vertices, arrow preview from last vertex, reposition bubbles at each vertex
+		// ============================================================================
+		const pathPoints = drawing.type === 'path' ? drawing.points : undefined;
+		if (drawing.type === 'path' && chart && series && pathPoints && pathPoints.length >= 1) {
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+
+			const ts = chart.timeScale();
+			const screenPts: { x: number; y: number }[] = [];
+			for (const p of pathPoints) {
+				const sx = ts.timeToCoordinate(p.time as any);
+				const sy = series.priceToCoordinate(p.price);
+				if (sx != null && sy != null) screenPts.push({ x: Number(sx), y: sy });
+			}
+			if (screenPts.length < 1) {
+				ctx.restore();
+				return;
+			}
+
+			const isInProgress = pathInProgressIdRef?.current === drawing.id;
+			const liveEndTime = isInProgress ? pathLiveEndTimeRef?.current : null;
+			const liveEndPrice = isInProgress ? pathLiveEndPriceRef?.current : null;
+			const strokeColor = drawing.style?.color || '#3b82f6';
+			ctx.strokeStyle = strokeColor;
+			ctx.lineWidth = drawing.style?.width || 2;
+			ctx.lineCap = 'round';
+			ctx.lineJoin = 'round';
+
+			// Segments between consecutive vertices
+			if (screenPts.length >= 2) {
+				ctx.beginPath();
+				ctx.moveTo(screenPts[0].x, screenPts[0].y);
+				for (let i = 1; i < screenPts.length; i++) {
+					ctx.lineTo(screenPts[i].x, screenPts[i].y);
+				}
+				ctx.stroke();
+			}
+
+			// Live preview: line from last vertex to pointer + arrow at pointer
+			if (isInProgress && liveEndTime != null && liveEndPrice != null) {
+				const endX = Number(ts.timeToCoordinate(liveEndTime as any));
+				const endY = series.priceToCoordinate(liveEndPrice);
+				if (endX != null && endY != null) {
+					const last = screenPts[screenPts.length - 1];
+					ctx.beginPath();
+					ctx.moveTo(last.x, last.y);
+					ctx.lineTo(endX, endY);
+					ctx.stroke();
+					// Arrow at end (small chevron)
+					const dx = endX - last.x;
+					const dy = endY - last.y;
+					const len = Math.hypot(dx, dy);
+					if (len >= 4) {
+						const ux = dx / len;
+						const uy = dy / len;
+						const arrowLen = 8;
+						const arrowW = 5;
+						ctx.beginPath();
+						ctx.moveTo(endX, endY);
+						ctx.lineTo(endX - ux * arrowLen - uy * arrowW, endY - uy * arrowLen + ux * arrowW);
+						ctx.lineTo(endX - ux * arrowLen * 0.7, endY - uy * arrowLen * 0.7);
+						ctx.lineTo(endX - ux * arrowLen + uy * arrowW, endY - uy * arrowLen - ux * arrowW);
+						ctx.closePath();
+						ctx.fillStyle = strokeColor;
+						ctx.fill();
+						ctx.stroke();
+					}
+				}
+			}
+
+			const selected = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
+			const showBubbles = selected || isInProgress;
+			if (showBubbles) {
+				const r = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = strokeColor;
+				ctx.lineWidth = 1.5;
+				for (let i = 0; i < screenPts.length; i++) {
+					ctx.beginPath();
+					ctx.arc(screenPts[i].x, screenPts[i].y, r, 0, 2 * Math.PI);
+					ctx.fill();
+					ctx.stroke();
+				}
+			}
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
+		// BRUSH: chart-space path (sticks to candles); two visual-only bubbles at ends when selected
+		// ============================================================================
+		if (drawing.type === 'brush' && chart && series) {
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+
+			let screenPts: { x: number; y: number }[];
+			if (drawing.points && drawing.points.length >= 2) {
+				screenPts = [];
+				const ts = chart.timeScale();
+				for (const p of drawing.points) {
+					const sx = ts.timeToCoordinate(p.time as any);
+					const sy = series.priceToCoordinate(p.price);
+					if (sx != null && sy != null) screenPts.push({ x: Number(sx), y: sy });
+				}
+			} else if (drawing.screenPoints && drawing.screenPoints.length >= 2) {
+				screenPts = drawing.screenPoints;
+			} else {
+				ctx.restore();
+				return;
+			}
+			if (screenPts.length < 2) {
+				ctx.restore();
+				return;
+			}
+
+			ctx.strokeStyle = drawing.style?.color || '#3b82f6';
+			ctx.lineWidth = drawing.style?.width || 2;
+			ctx.lineCap = 'round';
+			ctx.lineJoin = 'round';
+			ctx.beginPath();
+			ctx.moveTo(screenPts[0].x, screenPts[0].y);
+			for (let i = 1; i < screenPts.length; i++) {
+				ctx.lineTo(screenPts[i].x, screenPts[i].y);
+			}
+			ctx.stroke();
+
+			// Two reposition bubbles at both ends when selected (visual only, not draggable)
+			const selected = selectedLineIdRef.current === drawing.id;
+			if (selected) {
+				const r = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.arc(screenPts[0].x, screenPts[0].y, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(screenPts[screenPts.length - 1].x, screenPts[screenPts.length - 1].y, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+			}
+			ctx.restore();
+			return;
+		}
+
 		// MVP: screen-space drawing (works immediately, no chart mapping)
-		// Skip this for parallel-channel as it has its own rendering logic
-		if (drawing.screenPoints && drawing.screenPoints.length >= 1 && (drawing.type as string) !== 'parallel-channel') {
+		// Skip this for parallel-channel as it has its own rendering logic. Brush is handled above.
+		if (drawing.screenPoints && drawing.screenPoints.length >= 1 && (drawing.type as string) !== 'parallel-channel' && drawing.type !== 'brush' && drawing.type !== 'rectangle' && drawing.type !== 'path' && drawing.type !== 'circle') {
 			const pts = drawing.screenPoints;
 			ctx.save();
 			// Clip so we don't draw over the axis area
@@ -1079,47 +1403,42 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			if (y == null) return;
 
 			const containerWidth = plotWidth || container.getBoundingClientRect().width;
-
-			// Get selection/hidden state for styling
+			const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
 			const isSelected = selectedHorizontalLineIdRef.current === drawing.id;
 			const isHidden = !!drawing.hidden;
 			const lineColor = isHidden ? 'rgba(148, 163, 184, 0.9)' : isSelected ? '#2563eb' : '#3b82f6';
 			const lineWidth = isHidden ? 1 : isSelected ? 2 : (drawing.style?.width || 2);
 
-			// Only show square when hovered OR selected
 			const shouldShowSquare =
 				selectedHorizontalLineIdRef.current === drawing.id ||
 				hoveredHorizontalLineIdRef.current === drawing.id;
-			
-			// Square dimensions (slightly smaller)
+			const drawStrokeOnOverlay = !underlayIsPrimitive || isCurrentDrawing;
+
 			const squareSize = 11;
-			const squareX = containerWidth - squareSize - 28; // move further left (avoid y-axis collision)
-			const squareY = y - squareSize / 2; // Center vertically on the line
+			const squareX = containerWidth - squareSize - 28;
+			const squareY = y - squareSize / 2;
 			const borderRadius = 3;
 
-			// Draw the main horizontal line
-			ctx.save();
-			ctx.beginPath();
-			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
-			ctx.clip();
-			ctx.strokeStyle = lineColor;
-			ctx.lineWidth = lineWidth;
-			ctx.lineCap = 'round';
-			
-			// Draw line:
-			// - If square is visible: draw two segments so the line doesn't appear inside the hollow square
-			// - Otherwise: draw full width to the axis
-			ctx.beginPath();
-			ctx.moveTo(0, y);
-			if (shouldShowSquare) {
-				ctx.lineTo(squareX, y);
-				ctx.moveTo(squareX + squareSize, y);
-				ctx.lineTo(containerWidth, y);
-			} else {
-				ctx.lineTo(containerWidth, y);
+			if (drawStrokeOnOverlay) {
+				ctx.save();
+				ctx.beginPath();
+				ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+				ctx.clip();
+				ctx.strokeStyle = lineColor;
+				ctx.lineWidth = lineWidth;
+				ctx.lineCap = 'round';
+				ctx.beginPath();
+				ctx.moveTo(0, y);
+				if (shouldShowSquare) {
+					ctx.lineTo(squareX, y);
+					ctx.moveTo(squareX + squareSize, y);
+					ctx.lineTo(containerWidth, y);
+				} else {
+					ctx.lineTo(containerWidth, y);
+				}
+				ctx.stroke();
+				ctx.restore();
 			}
-			ctx.stroke();
-			ctx.restore();
 
 			// Draw hollow rounded corner square on the right border (only if hovered/selected)
 			if (shouldShowSquare) {
@@ -1166,35 +1485,32 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			if (startX == null || y == null) return;
 
 			const containerWidth = plotWidth || container.getBoundingClientRect().width;
-
-			// Get selection/hidden state for styling
+			const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
 			const isSelected = selectedHorizontalRayIdRef.current === drawing.id;
 			const isHidden = !!drawing.hidden;
 			const lineColor = isHidden ? 'rgba(148, 163, 184, 0.9)' : isSelected ? '#2563eb' : '#3b82f6';
 			const lineWidth = isHidden ? 1 : isSelected ? 2 : (drawing.style?.width || 2);
 
-			// Only show bubble when hovered OR selected
 			const shouldShowBubble =
 				selectedHorizontalRayIdRef.current === drawing.id ||
 				hoveredHorizontalRayIdRef.current === drawing.id;
+			const drawStrokeOnOverlay = !underlayIsPrimitive || isCurrentDrawing;
 
-			// Draw the main horizontal ray line
-			ctx.save();
-			ctx.beginPath();
-			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
-			ctx.clip();
-			ctx.strokeStyle = lineColor;
-			ctx.lineWidth = lineWidth;
-			ctx.lineCap = 'round';
-			
-			// Draw horizontal line from start point to right edge
-			ctx.beginPath();
-			ctx.moveTo(startX, y);
-			ctx.lineTo(containerWidth, y);
-			ctx.stroke();
-			ctx.restore();
+			if (drawStrokeOnOverlay) {
+				ctx.save();
+				ctx.beginPath();
+				ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+				ctx.clip();
+				ctx.strokeStyle = lineColor;
+				ctx.lineWidth = lineWidth;
+				ctx.lineCap = 'round';
+				ctx.beginPath();
+				ctx.moveTo(startX, y);
+				ctx.lineTo(containerWidth, y);
+				ctx.stroke();
+				ctx.restore();
+			}
 
-			// Draw bubble at start point (only if hovered/selected)
 			if (shouldShowBubble) {
 				const r = 5;
 				const isHandleHovered = hoveredHorizontalRayHandleIdRef.current === drawing.id;
@@ -1238,9 +1554,13 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			// ============================================================================
 			// RAY TOOL: Rendering Logic
 			// ============================================================================
-			// Ray extends from bubble 1 through bubble 2 to the edge of the chart
 			const start = screenPoints[0];
 			const end = screenPoints[1];
+			const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
+			const isHovered = hoveredLineIdRef.current === drawing.id;
+			const isSelected = selectedLineIdRef.current === drawing.id;
+			const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
+			const drawStrokeOnOverlay = !underlayIsPrimitive || isCurrentDrawing;
 
 			const plotW = plotWidth || container.getBoundingClientRect().width;
 			const plotH = container.getBoundingClientRect().height;
@@ -1259,69 +1579,45 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				const unitY = dy / length;
 
 				// Extend ray from start point through end point to chart edge
-				// Find intersection with plot area edges
 				let finalX = end.x;
 				let finalY = end.y;
 
-				// Calculate intersections with all four edges
 				const intersections: { x: number; y: number; t: number }[] = [];
-
-				// Left edge (x = 0)
 				if (unitX < 0) {
 					const t = (0 - start.x) / unitX;
 					const y = start.y + unitY * t;
-					if (y >= 0 && y <= plotH) {
-						intersections.push({ x: 0, y, t });
-					}
+					if (y >= 0 && y <= plotH) intersections.push({ x: 0, y, t });
 				}
-
-				// Right edge (x = plotW)
 				if (unitX > 0) {
 					const t = (plotW - start.x) / unitX;
 					const y = start.y + unitY * t;
-					if (y >= 0 && y <= plotH) {
-						intersections.push({ x: plotW, y, t });
-					}
+					if (y >= 0 && y <= plotH) intersections.push({ x: plotW, y, t });
 				}
-
-				// Top edge (y = 0)
 				if (unitY < 0) {
 					const t = (0 - start.y) / unitY;
 					const x = start.x + unitX * t;
-					if (x >= 0 && x <= plotW) {
-						intersections.push({ x, y: 0, t });
-					}
+					if (x >= 0 && x <= plotW) intersections.push({ x, y: 0, t });
 				}
-
-				// Bottom edge (y = plotH)
 				if (unitY > 0) {
 					const t = (plotH - start.y) / unitY;
 					const x = start.x + unitX * t;
-					if (x >= 0 && x <= plotW) {
-						intersections.push({ x, y: plotH, t });
-					}
+					if (x >= 0 && x <= plotW) intersections.push({ x, y: plotH, t });
 				}
-
-				// Find the intersection furthest from start (in the direction of the ray)
 				if (intersections.length > 0) {
 					const furthest = intersections.reduce((prev, curr) => (curr.t > prev.t ? curr : prev));
 					finalX = furthest.x;
 					finalY = furthest.y;
 				}
 
-				// Draw the ray from start through end to edge
-				ctx.beginPath();
-				ctx.moveTo(start.x, start.y);
-				ctx.lineTo(finalX, finalY);
-				ctx.stroke();
-
-				// Show bubbles when:
-				// 1. It's the currentDrawing (live preview while drawing)
-				// 2. OR ray is hovered or selected (completed drawings)
-				const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
-				const isHovered = hoveredLineIdRef.current === drawing.id;
-				const isSelected = selectedLineIdRef.current === drawing.id;
-				const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
+				if (drawStrokeOnOverlay) {
+					ctx.strokeStyle = drawing.style?.color || '#3b82f6';
+					ctx.lineWidth = drawing.style?.width ?? 2;
+					ctx.lineCap = 'round';
+					ctx.beginPath();
+					ctx.moveTo(start.x, start.y);
+					ctx.lineTo(finalX, finalY);
+					ctx.stroke();
+				}
 
 				if (shouldShowBubbles) {
 					const r = 5;
@@ -1369,6 +1665,12 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			const start = screenPoints[0];
 			const end = screenPoints[screenPoints.length - 1];
 
+			const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
+			const isHovered = hoveredLineIdRef.current === drawing.id;
+			const isSelected = selectedLineIdRef.current === drawing.id;
+			const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
+			const drawStrokeOnOverlay = !underlayIsPrimitive || isCurrentDrawing;
+
 			// Segment-only renderer (chart-space): bubble -> bubble, no extension
 			const plotW = plotWidth || container.getBoundingClientRect().width;
 			ctx.save();
@@ -1376,18 +1678,15 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			ctx.rect(0, 0, plotW, container.getBoundingClientRect().height);
 			ctx.clip();
 
-			ctx.beginPath();
-			ctx.moveTo(start.x, start.y);
-			ctx.lineTo(end.x, end.y);
-			ctx.stroke();
-
-			// Show bubbles when:
-			// 1. Line is hovered or selected (completed drawings)
-			// 2. OR it's the currentDrawing (live preview while drawing)
-			const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
-			const isHovered = hoveredLineIdRef.current === drawing.id;
-			const isSelected = selectedLineIdRef.current === drawing.id;
-			const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
+			if (drawStrokeOnOverlay) {
+				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
+				ctx.lineWidth = drawing.style?.width ?? 2;
+				ctx.lineCap = 'round';
+				ctx.beginPath();
+				ctx.moveTo(start.x, start.y);
+				ctx.lineTo(end.x, end.y);
+				ctx.stroke();
+			}
 
 			if (shouldShowBubbles) {
 				const r = 5;
