@@ -416,7 +416,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 					{/* Dropdown menu */}
 					{showCrosshairMenu && (
 						<div
-							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[225px] z-50"
+							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[280px] z-50"
 						>
 							{crosshairMenuItems.map((item) => {
 								const isSelected = selectedCrosshairType === item.id;
@@ -448,7 +448,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 												: 'text-slate-900 hover:bg-transparent',
 										].join(' ')}
 									>
-										<span className="flex items-center gap-2">
+										<span className="flex items-center gap-2 whitespace-nowrap">
 											{item.icon === 'cross' && (
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.05}>
 													<path d="M12 3v6" />
@@ -574,7 +574,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 
 					{showProjectionMenu && (
 						<div
-							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[225px] z-50"
+							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[280px] z-50"
 						>
 							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
 								Projection
@@ -598,7 +598,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
 										].join(' ')}
 									>
-										<span className="flex items-center gap-2">
+										<span className="flex items-center gap-2 whitespace-nowrap">
 											{item.icon === 'long-position' && (
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.15}>
 													<path d="M4 4H20" stroke="currentColor" strokeLinecap="round" />
@@ -655,7 +655,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
 										].join(' ')}
 									>
-										<span className="flex items-center gap-2">
+										<span className="flex items-center gap-2 whitespace-nowrap">
 											{item.icon === 'price-range' && (
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 													<path d="M4 4h16" stroke="currentColor" strokeLinecap="round" />
@@ -719,7 +719,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 						{tool.icon}
 					</button>
 					{showFibonacciMenu && (
-						<div className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[220px] z-50">
+						<div className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[280px] z-50">
 							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
 								Fibonacci
 							</div>
@@ -742,7 +742,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
 										].join(' ')}
 									>
-										<span className="flex items-center gap-2">
+										<span className="flex items-center gap-2 whitespace-nowrap">
 											<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 												<path d="M4 5h16" stroke="currentColor" strokeWidth="1.2" />
 												<path d="M4 10h16" stroke="currentColor" strokeWidth="1.2" />
@@ -823,7 +823,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 
 					{showShapesMenu && (
 						<div
-							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[225px] z-50"
+							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[280px] z-50"
 						>
 							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
 								Shapes
@@ -850,7 +850,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
 										].join(' ')}
 									>
-										<span className="flex items-center gap-2">
+										<span className="flex items-center gap-2 whitespace-nowrap">
 											{item.icon === 'brush' && (
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1.05}>
 													<path d="M16.5 3.5a2.121 2.121 0 013 3L8 18l-4 1 1-4 11.5-11.5z" />
@@ -889,7 +889,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
 										].join(' ')}
 									>
-										<span className="flex items-center gap-2">
+										<span className="flex items-center gap-2 whitespace-nowrap">
 											{item.icon === 'rectangle' && (
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 													<rect x="4" y="4" width="16" height="16" rx="1" fill="none" stroke="currentColor" />
@@ -982,7 +982,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 
 					{showLinesMenu && (
 						<div
-							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[225px] z-50"
+							className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[280px] z-50"
 						>
 							{/* Section Heading */}
 							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-100">
@@ -1011,7 +1011,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 												: 'text-slate-900 hover:bg-transparent',
 										].join(' ')}
 									>
-										<span className="flex items-center gap-2">
+										<span className="flex items-center gap-2 whitespace-nowrap">
 											{item.icon === 'ray' && (
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 													<path d="M5 19L19 5" />
@@ -1084,7 +1084,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 														: 'text-slate-900 hover:bg-transparent',
 												].join(' ')}
 											>
-												<span className="flex items-center gap-2">
+												<span className="flex items-center gap-2 whitespace-nowrap">
 													{item.icon === 'parallel-channel' && (
 														<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 															<path d="M4 19L20 5" stroke="currentColor" />

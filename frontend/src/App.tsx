@@ -5,12 +5,14 @@ import FullscreenChart from './pages/FullscreenChart';
 function App() {
 	return (
 		<Router>
-			<div className="min-h-screen bg-slate-50">
+			<div className="h-screen overflow-hidden bg-slate-50 flex flex-col">
 				<Navigation />
-				<Routes>
-					<Route path="/" element={<FullscreenChart />} />
-					<Route path="*" element={<Navigate to="/" replace />} />
-				</Routes>
+				<div className="flex-1 min-h-0 flex flex-col">
+					<Routes>
+						<Route path="/" element={<FullscreenChart />} />
+						<Route path="*" element={<Navigate to="/" replace />} />
+					</Routes>
+				</div>
 			</div>
 		</Router>
 	);
