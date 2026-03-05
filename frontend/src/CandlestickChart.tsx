@@ -851,12 +851,11 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             if (tool === 'brush') {
                 e.preventDefault();
                 e.stopPropagation();
-                const chartPt = screenToChart(x, y);
-                if (!chartPt) return;
+                const { x: localX, y: localY } = getLocalXY(e);
                 const brushDrawing: Drawing = {
                     id: drawingId,
                     type: 'brush',
-                    points: [chartPt],
+                    screenPoints: [{ x: localX, y: localY }],
                     style: { color: '#3b82f6', width: 2 },
                 };
                 currentDrawingRef = brushDrawing;
@@ -1421,11 +1420,9 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 e.preventDefault();
                 e.stopPropagation();
                 const { x, y } = getLocalXY(e);
-                const chartPt = screenToChart(x, y);
-                if (!chartPt) return;
                 const updated = {
                     ...currentDrawingRef,
-                    points: [...(currentDrawingRef.points || []), chartPt],
+                    screenPoints: [...(currentDrawingRef.screenPoints || []), { x, y }],
                 };
                 currentDrawingRef = updated;
                 setCurrentDrawingRefFn.current(updated);
@@ -1608,7 +1605,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             if (currentDrawingRef?.type === 'brush') {
                 e.preventDefault();
                 e.stopPropagation();
-                const pts = currentDrawingRef.points || [];
+                const pts = currentDrawingRef.screenPoints || currentDrawingRef.points || [];
                 if (pts.length >= 2) {
                     addDrawingRefFn.current(currentDrawingRef);
                 }
@@ -3311,28 +3308,36 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 return;
             }
 
-            // Click on brush stroke body: start body drag (move whole brush stroke in chart space)
+            // Click on brush stroke body: start body drag (move whole brush stroke; screen or chart space)
             const brushBodyId = findHoveredBrushId(x, y);
             if (brushBodyId) {
                 const targetDrawing = drawings.find((d) => d.id === brushBodyId);
                 if (!targetDrawing || targetDrawing.locked) return;
                 if (targetDrawing.type !== 'brush') return;
-                const pts = targetDrawing.points || targetDrawing.screenPoints;
+                const pts = targetDrawing.screenPoints || targetDrawing.points;
                 if (!pts || pts.length < 2) return;
-                const chartPoints = (targetDrawing.points || []) as { time: number; price: number }[];
-                if (chartPoints.length < 2) return;
 
-                const clickTime = getTimeFromX(chart, x);
-                const clickPrice = series.coordinateToPrice(y);
-                if (clickTime == null || clickPrice == null) return;
-
-                draggingLineHandleRef.current = {
+                const { x: localX, y: localY } = getLocalXY(e);
+                const base: { lineId: string; handle: 'brush-body'; initialClickTime?: number; initialClickPrice?: number; initialChartPoints?: { time: number; price: number }[]; initialScreenPoints?: { x: number; y: number }[]; initialPointerX?: number; initialPointerY?: number } = {
                     lineId: brushBodyId,
                     handle: 'brush-body',
-                    initialClickTime: clickTime,
-                    initialClickPrice: clickPrice,
-                    initialChartPoints: chartPoints.map((p) => ({ time: p.time, price: p.price })),
                 };
+                if (targetDrawing.screenPoints && targetDrawing.screenPoints.length >= 2) {
+                    base.initialScreenPoints = targetDrawing.screenPoints.map((p) => ({ x: p.x, y: p.y }));
+                    base.initialPointerX = localX;
+                    base.initialPointerY = localY;
+                } else {
+                    const chartPoints = (targetDrawing.points || []) as { time: number; price: number }[];
+                    if (chartPoints.length < 2) return;
+                    const clickTime = getTimeFromX(chart, x);
+                    const clickPrice = series.coordinateToPrice(y);
+                    if (clickTime == null || clickPrice == null) return;
+                    base.initialClickTime = clickTime;
+                    base.initialClickPrice = clickPrice;
+                    base.initialChartPoints = chartPoints.map((p) => ({ time: p.time, price: p.price }));
+                }
+
+                draggingLineHandleRef.current = base as any;
                 setSelectedLineId(brushBodyId);
                 setSelectedDrawingId(brushBodyId);
 
@@ -3806,23 +3811,37 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 return;
             }
 
-            // Handle brush stroke body drag (moving entire stroke in chart space)
+            // Handle brush stroke body drag (screen-space or chart-space)
             if (drag.handle === 'brush-body') {
-                if (drag.initialClickTime == null || drag.initialClickPrice == null || !drag.initialChartPoints?.length) return;
-                const currentTime = getTimeFromX(chart, x);
-                const currentPrice = series.coordinateToPrice(y);
-                if (currentTime == null || currentPrice == null) return;
-                const deltaTime = currentTime - drag.initialClickTime;
-                const deltaPrice = currentPrice - drag.initialClickPrice;
-                updateDrawing(drag.lineId, (prev) => {
-                    if (prev.type === 'brush' && drag.initialChartPoints?.length) {
-                        return {
-                            ...prev,
-                            points: drag.initialChartPoints.map((p) => ({ time: p.time + deltaTime, price: p.price + deltaPrice })),
-                        };
-                    }
-                    return prev;
-                });
+                if (drag.initialScreenPoints?.length) {
+                    const { x: localX, y: localY } = getLocalXY(e as any);
+                    const dx = localX - (drag.initialPointerX ?? 0);
+                    const dy = localY - (drag.initialPointerY ?? 0);
+                    updateDrawing(drag.lineId, (prev) => {
+                        if (prev.type === 'brush' && drag.initialScreenPoints?.length) {
+                            return {
+                                ...prev,
+                                screenPoints: drag.initialScreenPoints.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+                            };
+                        }
+                        return prev;
+                    });
+                } else if (drag.initialClickTime != null && drag.initialClickPrice != null && drag.initialChartPoints?.length) {
+                    const currentTime = getTimeFromX(chart, x);
+                    const currentPrice = series.coordinateToPrice(y);
+                    if (currentTime == null || currentPrice == null) return;
+                    const deltaTime = currentTime - drag.initialClickTime;
+                    const deltaPrice = currentPrice - drag.initialClickPrice;
+                    updateDrawing(drag.lineId, (prev) => {
+                        if (prev.type === 'brush' && drag.initialChartPoints?.length) {
+                            return {
+                                ...prev,
+                                points: drag.initialChartPoints.map((p) => ({ time: p.time + deltaTime, price: p.price + deltaPrice })),
+                            };
+                        }
+                        return prev;
+                    });
+                }
                 return;
             }
 

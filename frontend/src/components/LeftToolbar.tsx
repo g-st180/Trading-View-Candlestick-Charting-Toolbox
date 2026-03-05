@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import EmojiPicker, { Theme } from 'emoji-picker-react';
+import type { EmojiClickData } from 'emoji-picker-react';
 import { useDrawing } from './DrawingContext';
 
 type ToolButton = {
@@ -305,11 +307,6 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		{ id: 'circle', label: 'Circle', icon: 'circle' },
 	];
 
-	// Unicode emojis for picker (no external library)
-	const EMOJI_LIST = [
-		'😀', '😃', '😄', '😁', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😋', '😛', '😜', '🤪', '😝', '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '😐', '😑', '😶', '😏', '😣', '😥', '😮', '😯', '😪', '😫', '😴', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '😎', '🤓', '🧐', '🎉', '🎊', '🎈', '🎁', '🏆', '⭐', '🌟', '✨', '🔥', '💯', '✅', '❌', '❓', '❗', '🎯', '📌', '📍', '💡', '👍', '👎', '👏', '🙌', '🤝', '💪', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '🚀', '⚡', '🔔', '🔕', '📢', '💬', '💭', '🗯️', '🦋', '🐛', '🌸', '🌺', '🌻', '🌹', '🥀', '🌷', '🍀', '🌈',
-	];
-
 	const renderButton = (tool: ToolButton) => {
 		// Bottom actions: lock / eye / trash operate on selected drawing
 		if (tool.id === 'trash' || tool.id === 'eye' || tool.id === 'lock') {
@@ -395,6 +392,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowProjectionMenu(false);
 							setShowShapesMenu(false);
 							setShowLinesMenu(false);
+							setShowEmojiPicker(false);
 							setActiveToolId('crosshair');
 							setActiveTool(null);
 							setShowCrosshairMenu((v) => !v);
@@ -510,6 +508,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowCrosshairMenu(false);
 							setShowShapesMenu(false);
 							setShowLinesMenu(false);
+							setShowEmojiPicker(false);
 							setActiveToolId('projection');
 							setActiveTool(selectedProjectionType as any);
 							setShowProjectionMenu((v) => !v);
@@ -697,6 +696,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowCrosshairMenu(false);
 							setShowProjectionMenu(false);
 							setShowLinesMenu(false);
+							setShowEmojiPicker(false);
 							setActiveToolId('shapes');
 							setActiveTool(selectedShapesType as any);
 							setShowShapesMenu((v) => !v);
@@ -857,6 +857,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowCrosshairMenu(false);
 							setShowProjectionMenu(false);
 							setShowShapesMenu(false);
+							setShowEmojiPicker(false);
 							setActiveToolId('lines');
 							setActiveTool(selectedLinesType as any);
 							setShowLinesMenu((v) => !v);
@@ -1053,28 +1054,18 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 						{tool.icon}
 					</button>
 					{showEmojiPicker && (
-						<div className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg p-2 z-50 min-w-[200px] max-w-[240px]">
-							<div className="text-xs font-semibold text-slate-500 uppercase tracking-wider pb-2 border-b border-slate-100">
-								Pick an emoji
-							</div>
-							<div className="grid grid-cols-8 gap-0.5 pt-2 max-h-[280px] overflow-y-auto">
-								{EMOJI_LIST.map((emoji, i) => (
-									<button
-										key={i}
-										type="button"
-										className="w-8 h-8 flex items-center justify-center rounded hover:bg-slate-100 text-lg leading-none"
-										title={`Use ${emoji}`}
-										onClick={() => {
-											setSelectedEmoji(emoji);
-											setActiveTool('emoji' as any);
-											setActiveToolId('emoji');
-											setShowEmojiPicker(false);
-										}}
-									>
-										{emoji}
-									</button>
-								))}
-							</div>
+						<div className="absolute left-full ml-2 top-0 z-50 rounded-lg shadow-lg overflow-hidden border border-slate-200">
+							<EmojiPicker
+								theme={Theme.LIGHT}
+								width={320}
+								height={400}
+								onEmojiClick={(data: EmojiClickData) => {
+									setSelectedEmoji(data.emoji);
+									setActiveTool('emoji' as any);
+									setActiveToolId('emoji');
+									setShowEmojiPicker(false);
+								}}
+							/>
 						</div>
 					)}
 				</div>
