@@ -19,7 +19,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     const lastFutureTimeRef = useRef<number>(0);
     const candlestickDataRef = useRef<CandlestickData<Time>[]>([]);
     const [candlestickDataVersion, setCandlestickDataVersion] = useState(0);
-    const underlayDataRef = useRef<{ drawings: Drawing[]; candlestickData: { time: number; open: number; high: number; low: number; close: number; volume?: number }[] }>({ drawings: [], candlestickData: [] });
+    const underlayDataRef = useRef<{ drawings: Drawing[]; candlestickData: { time: number; open: number; high: number; low: number; close: number; volume?: number }[]; inProgressIds: Set<string> }>({ drawings: [], candlestickData: [], inProgressIds: new Set() });
     const underlayRequestUpdateRef = useRef<{ requestUpdate: (() => void) | null }>({ requestUpdate: null });
     const underlayPrimitiveRef = useRef<DrawingsUnderlayPrimitive | null>(null);
     const [chartApi, setChartApi] = useState<IChartApi | null>(null);
@@ -114,6 +114,10 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     const circleLiveEndTimeRef = useRef<number | null>(null);
     const circleLiveEndPriceRef = useRef<number | null>(null);
     const [circleLiveTick, setCircleLiveTick] = useState(0);
+    const fibRetracementInProgressRef = useRef<string | null>(null);
+    const fibRetracementLiveEndTimeRef = useRef<number | null>(null);
+    const fibRetracementLiveEndPriceRef = useRef<number | null>(null);
+    const [fibRetracementLiveTick, setFibRetracementLiveTick] = useState(0);
 
     // Sync horizontal-line drawings to lightweight-charts price markers (right price scale)
     useEffect(() => {
@@ -522,8 +526,8 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
             },
             grid: { 
-                vertLines: { color: '#f1f5f9', style: 1, visible: true }, 
-                horzLines: { color: '#f1f5f9', style: 1, visible: true } 
+                vertLines: { color: '#e5e9ed', style: 1, visible: true }, 
+                horzLines: { color: '#e5e9ed', style: 1, visible: true } 
             },
             crosshair: {
                 mode: CrosshairMode.Normal,
@@ -615,9 +619,15 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         };
     }, []);
 
-    // Sync underlay data and request redraw so primitive draws above grid, behind candles
+    // Sync underlay data and request redraw so primitive draws above grid, behind candles.
+    // Exclude in-progress drawings from underlay so only the overlay draws them (avoids double-draw = darker look).
     useEffect(() => {
         underlayDataRef.current.drawings = drawings;
+        const ids = new Set<string>();
+        if (priceRangeInProgressRef.current) ids.add(priceRangeInProgressRef.current);
+        if (dateRangeInProgressRef.current) ids.add(dateRangeInProgressRef.current);
+        if (fibRetracementInProgressRef.current) ids.add(fibRetracementInProgressRef.current);
+        underlayDataRef.current.inProgressIds = ids;
         const raw = candlestickDataRef.current ?? [];
         underlayDataRef.current.candlestickData = raw.map((b) => ({
             time: b.time as number,
@@ -628,7 +638,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             volume: (b as any).volume,
         }));
         underlayRequestUpdateRef.current.requestUpdate?.();
-    }, [drawings, candlestickDataVersion]);
+    }, [drawings, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, fibRetracementLiveTick]);
 
     // Crosshair style tuning:
     // - Dot mode: hide crosshair lines so the dot is clean (no cross over it)
@@ -666,8 +676,8 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         const now = Date.now() / 1000;
         const currentMinuteTime = Math.floor(now / barIntervalSeconds) * barIntervalSeconds;
         
-        // Historical bars (50 bars before current minute)
-        for (let i = 50; i >= 1; i--) {
+        // Historical bars (4000 bars before current minute — ~2.8 days of 1m data)
+        for (let i = 4000; i >= 1; i--) {
             const t = (currentMinuteTime - i * barIntervalSeconds) as UTCTimestamp;
             const change = (Math.random() - 0.5) * 10;
             const open = basePrice;
@@ -728,7 +738,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         if (chart) {
             const ts = chart.timeScale();
             const rangeEndTime = currentMinuteTime + barIntervalSeconds * (1 + 12); // current candle + 12 bars right margin
-            const rangeStartTime = currentMinuteTime - 50 * barIntervalSeconds; // ~50 bars of history
+            const rangeStartTime = currentMinuteTime - 50 * barIntervalSeconds; // initial view: ~50 bars of history (data has 200)
             const applyInitialView = () => {
                 try {
                     (ts as any).setVisibleRange?.({ from: rangeStartTime, to: rangeEndTime });
@@ -843,7 +853,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const handlePointerDown = (e: PointerEvent) => {
             const tool = activeToolRef.current;
-            if (tool !== 'lines' && tool !== 'ray' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position' && tool !== 'short-position' && tool !== 'price-range' && tool !== 'date-range' && tool !== 'brush' && tool !== 'rectangle' && tool !== 'path' && tool !== 'circle' && tool !== 'emoji') return;
+            if (tool !== 'lines' && tool !== 'ray' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position' && tool !== 'short-position' && tool !== 'price-range' && tool !== 'date-range' && tool !== 'fibonacci-retracement' && tool !== 'brush' && tool !== 'rectangle' && tool !== 'path' && tool !== 'circle' && tool !== 'emoji') return;
             const { x, y } = getLocalXY(e);
 
             const drawingId = `drawing-${Date.now()}`;
@@ -1117,6 +1127,49 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 setIsDrawingRefFn.current(false);
                 isDrawing = false;
                 currentDrawingRef = null;
+                return;
+            }
+
+            if (tool === 'fibonacci-retracement') {
+                const chart = chartRef.current;
+                const series = seriesRef.current;
+                if (!chart || !series) return;
+                const time = getTimeFromX(chart, x);
+                const price = series.coordinateToPrice(y);
+                if (time == null || price == null) return;
+
+                if (fibRetracementInProgressRef.current) {
+                    const id = fibRetracementInProgressRef.current;
+                    updateDrawingRefFn.current(id, (prev) => ({ ...prev, endTime: time, endPrice: price }));
+                    fibRetracementInProgressRef.current = null;
+                    fibRetracementLiveEndPriceRef.current = null;
+                    fibRetracementLiveEndTimeRef.current = null;
+                    setCurrentDrawingRefFn.current(null);
+                    setIsDrawingRefFn.current(false);
+                    setActiveToolRefFn.current(null);
+                    isDrawing = false;
+                    currentDrawingRef = null;
+                    setFibRetracementLiveTick((t) => t + 1);
+                    return;
+                }
+
+                const newDrawing: Drawing = {
+                    id: drawingId,
+                    type: 'fibonacci-retracement',
+                    startTime: time,
+                    startPrice: price,
+                    endTime: time,
+                    endPrice: price,
+                    style: { color: '#3b82f6', width: 2 },
+                };
+                addDrawingRefFn.current(newDrawing);
+                currentDrawingRef = newDrawing;
+                setCurrentDrawingRefFn.current(newDrawing);
+                isDrawing = true;
+                setIsDrawingRefFn.current(true);
+                fibRetracementInProgressRef.current = drawingId;
+                fibRetracementLiveEndPriceRef.current = null;
+                fibRetracementLiveEndTimeRef.current = null;
                 return;
             }
 
@@ -1479,6 +1532,22 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                         pathLiveEndPriceRef.current = endPrice;
                         setPathLiveTick((t) => t + 1);
                     }
+                }
+                return;
+            }
+            const fibRetracementId = fibRetracementInProgressRef.current;
+            if (fibRetracementId && tool === 'fibonacci-retracement') {
+                const chart = chartRef.current;
+                const series = seriesRef.current;
+                if (!chart || !series) return;
+                const { x, y } = getLocalXY(e);
+                const endTime = getTimeFromX(chart, x);
+                const endPrice = series.coordinateToPrice(y);
+                if (endTime != null && endPrice != null) {
+                    fibRetracementLiveEndTimeRef.current = endTime;
+                    fibRetracementLiveEndPriceRef.current = endPrice;
+                    setFibRetracementLiveTick((t) => t + 1);
+                    updateDrawingRefFn.current(fibRetracementId, (prev) => ({ ...prev, endTime, endPrice }));
                 }
                 return;
             }
@@ -2361,6 +2430,28 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return null;
         };
 
+        const findHoveredFibRetracementId = (localX: number, localY: number): string | null => {
+            const series = seriesRef.current;
+            const chart = chartRef.current;
+            if (!series || !chart) return null;
+            const ts = chart.timeScale();
+            for (const d of drawings) {
+                if (d.type !== 'fibonacci-retracement' || d.hidden) continue;
+                if (d.startTime == null || d.startPrice == null || d.endTime == null || d.endPrice == null) continue;
+                const startX = ts.timeToCoordinate(d.startTime as any);
+                const endX = ts.timeToCoordinate(d.endTime as any);
+                const startY = series.priceToCoordinate(d.startPrice);
+                const endY = series.priceToCoordinate(d.endPrice);
+                if (startX == null || endX == null || startY == null || endY == null) continue;
+                const minX = Math.min(Number(startX), Number(endX));
+                const maxX = Math.max(Number(startX), Number(endX));
+                const minY = Math.min(startY, endY);
+                const maxY = Math.max(startY, endY);
+                if (localX >= minX && localX <= maxX && localY >= minY && localY <= maxY) return d.id;
+            }
+            return null;
+        };
+
         // Point-to-segment distance for brush hit-test (hover/selection effect)
         const pointToSegmentDistHover = (px: number, py: number, x1: number, y1: number, x2: number, y2: number): number => {
             const dx = x2 - x1, dy = y2 - y1;
@@ -2522,6 +2613,30 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 if (distEnd <= handleRadius && distEnd < bestDist) {
                     bestDist = distEnd;
                     bestHandle = `${d.id}:price-range-end`;
+                }
+            }
+
+            // Fibonacci retracement: left corner of 1, right corner of 0
+            for (const d of drawings) {
+                if (d.type !== 'fibonacci-retracement' || d.hidden) continue;
+                if (d.startTime == null || d.startPrice == null || d.endTime == null || d.endPrice == null) continue;
+                const ts = chart.timeScale();
+                const startX = Number(ts.timeToCoordinate(d.startTime as any));
+                const endX = Number(ts.timeToCoordinate(d.endTime as any));
+                const startY = series.priceToCoordinate(d.startPrice);
+                const endY = series.priceToCoordinate(d.endPrice);
+                if (startX == null || endX == null || startY == null || endY == null) continue;
+                const leftX = Math.min(startX, endX);
+                const rightX = Math.max(startX, endX);
+                const distLeft = Math.hypot(localX - leftX, localY - startY);
+                const distRight = Math.hypot(localX - rightX, localY - endY);
+                if (distLeft <= handleRadius && distLeft < bestDist) {
+                    bestDist = distLeft;
+                    bestHandle = `${d.id}:fib-retracement-start`;
+                }
+                if (distRight <= handleRadius && distRight < bestDist) {
+                    bestDist = distRight;
+                    bestHandle = `${d.id}:fib-retracement-end`;
                 }
             }
 
@@ -2747,7 +2862,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerMove = (e: PointerEvent) => {
             // Don't do hover detection while a drawing tool is active
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'fibonacci-retracement' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') return;
 
             const { x, y } = getLocalXY(e);
 
@@ -2786,6 +2901,13 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             const dateRangeId = findHoveredDateRangeId(x, y);
             if (dateRangeId) {
                 setHoveredLineId(dateRangeId);
+                return;
+            }
+
+            // Then check fibonacci retracement body
+            const fibRetracementId = findHoveredFibRetracementId(x, y);
+            if (fibRetracementId) {
+                setHoveredLineId(fibRetracementId);
                 return;
             }
 
@@ -2829,11 +2951,11 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerDown = (e: PointerEvent) => {
             // If user is in a drawing tool, ignore selection logic
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle' || activeTool === 'emoji') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'fibonacci-retracement' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle' || activeTool === 'emoji') return;
 
             const { x, y } = getLocalXY(e);
             const handleId = findHoveredHandle(x, y);
-            const lineId = handleId ? handleId.split(':')[0] : (findHoveredPriceRangeId(x, y) ?? findHoveredDateRangeId(x, y) ?? findHoveredBrushId(x, y) ?? findHoveredRectangleId(x, y) ?? findHoveredCircleId(x, y) ?? findHoveredPathId(x, y) ?? findHoveredLineId(x, y));
+            const lineId = handleId ? handleId.split(':')[0] : (findHoveredPriceRangeId(x, y) ?? findHoveredDateRangeId(x, y) ?? findHoveredFibRetracementId(x, y) ?? findHoveredBrushId(x, y) ?? findHoveredRectangleId(x, y) ?? findHoveredCircleId(x, y) ?? findHoveredPathId(x, y) ?? findHoveredLineId(x, y));
 
             // Check if clicking on a long-position handle
             if (handleId && (handleId.includes(':top-left') || handleId.includes(':bottom-left') || handleId.includes(':right-middle') || handleId.includes(':left-middle'))) {
@@ -2862,6 +2984,15 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 return;
             }
 
+            // Check if clicking on a fib retracement handle
+            if (handleId && (handleId.includes(':fib-retracement-start') || handleId.includes(':fib-retracement-end'))) {
+                setSelectedLineId(lineId);
+                setSelectedDrawingId(lineId);
+                setSelectedHorizontalLineId(null);
+                setSelectedHorizontalRayId(null);
+                return;
+            }
+
             if (lineId) {
                 setSelectedLineId(lineId);
                 setSelectedDrawingId(lineId);
@@ -2874,7 +3005,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                         setSelectedLineId(null);
                         // Only clear selectedDrawingId if it's currently a lines, ray, long-position, short-position, or price-range tool
                         const currentSelected = drawings.find(d => d.id === selectedDrawingId);
-                        if (currentSelected?.type === 'lines' || currentSelected?.type === 'ray' || currentSelected?.type === 'long-position' || currentSelected?.type === 'short-position' || currentSelected?.type === 'price-range' || currentSelected?.type === 'date-range' || currentSelected?.type === 'brush' || currentSelected?.type === 'rectangle' || currentSelected?.type === 'path' || currentSelected?.type === 'circle') {
+                        if (currentSelected?.type === 'lines' || currentSelected?.type === 'ray' || currentSelected?.type === 'long-position' || currentSelected?.type === 'short-position' || currentSelected?.type === 'price-range' || currentSelected?.type === 'date-range' || currentSelected?.type === 'fibonacci-retracement' || currentSelected?.type === 'brush' || currentSelected?.type === 'rectangle' || currentSelected?.type === 'path' || currentSelected?.type === 'circle') {
                             setSelectedDrawingId(null);
                         }
                     }
@@ -2903,7 +3034,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     // NOTE: Also handles line body drag (moving entire line)
     // NOTE: Also handles parallel-channel body drag (moving entire channel)
     // NOTE: Also handles long-position body drag (moving entire RR box)
-    const draggingLineHandleRef = useRef<{ lineId: string; handle: 'start' | 'end' | 'start1' | 'end1' | 'start2' | 'end2' | 'mid1' | 'mid2' | 'top-left' | 'bottom-left' | 'right-middle' | 'left-middle' | 'line-body' | 'parallel-channel-body' | 'long-position-body' | 'price-range-body' | 'price-range-start' | 'price-range-end' | 'date-range-body' | 'date-range-start' | 'date-range-end' | 'brush-body' | 'rectangle-body' | 'rect-corner-tl' | 'rect-corner-tr' | 'rect-corner-bl' | 'rect-corner-br' | 'rect-edge-left' | 'rect-edge-right' | 'rect-edge-top' | 'rect-edge-bottom' | 'path-body' | 'path-vertex' | 'circle-body' | 'circle-center' | 'circle-radius'; pathVertexIndex?: number; initialClickTime?: number; initialClickPrice?: number; initialStartTime?: number; initialStartPrice?: number; initialEndTime?: number; initialEndPrice?: number; initialStart1Time?: number; initialStart1Price?: number; initialEnd1Time?: number; initialEnd1Price?: number; initialStart2Time?: number; initialStart2Price?: number; initialEnd2Time?: number; initialEnd2Price?: number; initialEntryPrice?: number; initialStopLoss?: number; initialTakeProfit?: number; initialLongPositionStartTime?: number; initialLongPositionEndTime?: number; initialPointerX?: number; initialPointerY?: number; initialScreenPoints?: { x: number; y: number }[]; initialChartPoints?: { time: number; price: number }[] } | null>(null);
+    const draggingLineHandleRef = useRef<{ lineId: string; handle: 'start' | 'end' | 'start1' | 'end1' | 'start2' | 'end2' | 'mid1' | 'mid2' | 'top-left' | 'bottom-left' | 'right-middle' | 'left-middle' | 'line-body' | 'parallel-channel-body' | 'long-position-body' | 'price-range-body' | 'price-range-start' | 'price-range-end' | 'date-range-body' | 'date-range-start' | 'date-range-end' | 'fib-retracement-body' | 'fib-retracement-start' | 'fib-retracement-end' | 'brush-body' | 'rectangle-body' | 'rect-corner-tl' | 'rect-corner-tr' | 'rect-corner-bl' | 'rect-corner-br' | 'rect-edge-left' | 'rect-edge-right' | 'rect-edge-top' | 'rect-edge-bottom' | 'path-body' | 'path-vertex' | 'circle-body' | 'circle-center' | 'circle-radius'; pathVertexIndex?: number; initialClickTime?: number; initialClickPrice?: number; initialStartTime?: number; initialStartPrice?: number; initialEndTime?: number; initialEndPrice?: number; initialStart1Time?: number; initialStart1Price?: number; initialEnd1Time?: number; initialEnd1Price?: number; initialStart2Time?: number; initialStart2Price?: number; initialEnd2Time?: number; initialEnd2Price?: number; initialEntryPrice?: number; initialStopLoss?: number; initialTakeProfit?: number; initialLongPositionStartTime?: number; initialLongPositionEndTime?: number; initialPointerX?: number; initialPointerY?: number; initialScreenPoints?: { x: number; y: number }[]; initialChartPoints?: { time: number; price: number }[] } | null>(null);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -3060,6 +3191,28 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return null;
         };
 
+        const findHoveredFibRetracementIdDrag = (localX: number, localY: number): string | null => {
+            const series = seriesRef.current;
+            const chart = chartRef.current;
+            if (!series || !chart) return null;
+            const ts = chart.timeScale();
+            for (const d of drawings) {
+                if (d.type !== 'fibonacci-retracement' || d.hidden) continue;
+                if (d.startTime == null || d.startPrice == null || d.endTime == null || d.endPrice == null) continue;
+                const startX = ts.timeToCoordinate(d.startTime as any);
+                const endX = ts.timeToCoordinate(d.endTime as any);
+                const startY = series.priceToCoordinate(d.startPrice);
+                const endY = series.priceToCoordinate(d.endPrice);
+                if (startX == null || endX == null || startY == null || endY == null) continue;
+                const minX = Math.min(Number(startX), Number(endX));
+                const maxX = Math.max(Number(startX), Number(endX));
+                const minY = Math.min(startY, endY);
+                const maxY = Math.max(startY, endY);
+                if (localX >= minX && localX <= maxX && localY >= minY && localY <= maxY) return d.id;
+            }
+            return null;
+        };
+
         // Point-to-segment distance for brush hit-test
         const pointToSegmentDist = (px: number, py: number, x1: number, y1: number, x2: number, y2: number): number => {
             const dx = x2 - x1, dy = y2 - y1;
@@ -3155,7 +3308,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const startDrag = (e: PointerEvent) => {
             // don't interfere with drawing tools
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'fibonacci-retracement' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') return;
             
             const { x, y } = getLocalXY(e);
             const chart = chartRef.current;
@@ -3340,6 +3493,51 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 draggingLineHandleRef.current = base as any;
                 setSelectedLineId(brushBodyId);
                 setSelectedDrawingId(brushBodyId);
+
+                try {
+                    container.setPointerCapture(e.pointerId);
+                } catch {
+                    // ignore
+                }
+                const chartContainer = (chart as any).chartElement?.parentElement || container;
+                if (chartContainer) {
+                    const canvas = chartContainer.querySelector('canvas');
+                    if (canvas) {
+                        (canvas as any).__originalPointerEvents = canvas.style.pointerEvents;
+                        canvas.style.pointerEvents = 'none';
+                    }
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Click on fibonacci retracement body: start body drag (move whole fib in chart space)
+            const fibBodyId = findHoveredFibRetracementIdDrag(x, y);
+            if (fibBodyId) {
+                const targetDrawing = drawings.find((d) => d.id === fibBodyId);
+                if (!targetDrawing || targetDrawing.locked) return;
+                if (targetDrawing.type !== 'fibonacci-retracement' || targetDrawing.startTime == null || targetDrawing.startPrice == null || targetDrawing.endTime == null || targetDrawing.endPrice == null) {
+                    setSelectedLineId(fibBodyId);
+                    setSelectedDrawingId(fibBodyId);
+                    return;
+                }
+                const clickTime = getTimeFromX(chart, x);
+                const clickPrice = series.coordinateToPrice(y);
+                if (clickTime == null || clickPrice == null) return;
+
+                draggingLineHandleRef.current = {
+                    lineId: fibBodyId,
+                    handle: 'fib-retracement-body',
+                    initialClickTime: clickTime,
+                    initialClickPrice: clickPrice,
+                    initialStartTime: targetDrawing.startTime as number,
+                    initialStartPrice: targetDrawing.startPrice,
+                    initialEndTime: targetDrawing.endTime as number,
+                    initialEndPrice: targetDrawing.endPrice,
+                };
+                setSelectedLineId(fibBodyId);
+                setSelectedDrawingId(fibBodyId);
 
                 try {
                     container.setPointerCapture(e.pointerId);
@@ -4100,6 +4298,46 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 return;
             }
 
+            // Handle fibonacci retracement free handles (left of 1, right of 0) and body drag
+            if (drag.handle === 'fib-retracement-start' || drag.handle === 'fib-retracement-end') {
+                const chart = chartRef.current;
+                const series = seriesRef.current;
+                if (!chart || !series) return;
+                const newT = getTimeFromX(chart, x);
+                const newP = series.coordinateToPrice(y);
+                if (newT == null || newP == null) return;
+                updateDrawing(drag.lineId, (prev) => {
+                    if (prev.type !== 'fibonacci-retracement' || prev.startTime == null || prev.startPrice == null || prev.endTime == null || prev.endPrice == null) return prev;
+                    if (drag.handle === 'fib-retracement-start') {
+                        return { ...prev, startTime: newT, startPrice: newP };
+                    } else {
+                        return { ...prev, endTime: newT, endPrice: newP };
+                    }
+                });
+                return;
+            }
+            if (drag.handle === 'fib-retracement-body') {
+                if (drag.initialClickTime == null || drag.initialClickPrice == null ||
+                    drag.initialStartTime == null || drag.initialStartPrice == null ||
+                    drag.initialEndTime == null || drag.initialEndPrice == null) return;
+                const currentTime = getTimeFromX(chart, x);
+                const currentPrice = series.coordinateToPrice(y);
+                if (currentTime == null || currentPrice == null) return;
+                const timeOffset = currentTime - drag.initialClickTime;
+                const priceOffset = currentPrice - drag.initialClickPrice;
+                updateDrawing(drag.lineId, (prev) => {
+                    if (prev.type !== 'fibonacci-retracement' || prev.startTime == null || prev.startPrice == null || prev.endTime == null || prev.endPrice == null) return prev;
+                    return {
+                        ...prev,
+                        startTime: drag.initialStartTime! + timeOffset,
+                        startPrice: drag.initialStartPrice! + priceOffset,
+                        endTime: drag.initialEndTime! + timeOffset,
+                        endPrice: drag.initialEndPrice! + priceOffset,
+                    };
+                });
+                return;
+            }
+
             // Handle long-position / short-position RR box handles
             if (drag.handle === 'top-left' || drag.handle === 'bottom-left' || drag.handle === 'right-middle' || drag.handle === 'left-middle') {
                 const chart = chartRef.current;
@@ -4412,7 +4650,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             // White hand cursor (grab) when hovering lines, ray, parallel channel, or long-position
             // Check if we're currently dragging a line body, parallel channel body, or long-position body
             const dragHandle = draggingLineHandleRef.current?.handle;
-            if (dragHandle === 'line-body' || dragHandle === 'parallel-channel-body' || dragHandle === 'long-position-body' || dragHandle === 'price-range-body' || dragHandle === 'date-range-body' || dragHandle === 'brush-body' || dragHandle === 'rectangle-body' || dragHandle === 'circle-body' || dragHandle === 'path-body') {
+            if (dragHandle === 'line-body' || dragHandle === 'parallel-channel-body' || dragHandle === 'long-position-body' || dragHandle === 'price-range-body' || dragHandle === 'date-range-body' || dragHandle === 'fib-retracement-body' || dragHandle === 'brush-body' || dragHandle === 'rectangle-body' || dragHandle === 'circle-body' || dragHandle === 'path-body') {
                 cursorStyle = 'grabbing';
             } else {
                 cursorStyle = 'grab';
@@ -4486,6 +4724,10 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 circleLiveEndTimeRef={circleLiveEndTimeRef}
                 circleLiveEndPriceRef={circleLiveEndPriceRef}
                 circleLiveTick={circleLiveTick}
+                fibRetracementInProgressIdRef={fibRetracementInProgressRef}
+                fibRetracementLiveEndTimeRef={fibRetracementLiveEndTimeRef}
+                fibRetracementLiveEndPriceRef={fibRetracementLiveEndPriceRef}
+                fibRetracementLiveTick={fibRetracementLiveTick}
             />
         </div>
     );

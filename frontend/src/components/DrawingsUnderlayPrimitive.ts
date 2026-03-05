@@ -66,11 +66,12 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		if (!chart || !series) return;
 		const data = this._dataRef.current;
 		if (!data) return;
-		const { drawings, candlestickData } = data;
+		const { drawings, candlestickData, inProgressIds } = data;
+		const inProgress = (inProgressIds as Set<string> | undefined) ?? new Set<string>();
 		const underlayDrawings = drawings.filter(
-			(d) => !d.hidden && (
+			(d) => !d.hidden && !inProgress.has(d.id) && (
 				d.type === 'long-position' || d.type === 'short-position' || d.type === 'parallel-channel' ||
-				d.type === 'price-range' || d.type === 'date-range' ||
+				d.type === 'price-range' || d.type === 'date-range' || d.type === 'fibonacci-retracement' ||
 				d.type === 'lines' || d.type === 'ray' || d.type === 'horizontal-line' || d.type === 'horizontal-ray'
 			)
 		);
@@ -97,6 +98,8 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 						this._drawPriceRange(ctx, chart, series, drawing);
 					} else if (drawing.type === 'date-range' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
 						this._drawDateRange(ctx, chart, series, drawing);
+					} else if (drawing.type === 'fibonacci-retracement' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
+						this._drawFibRetracement(ctx, chart, series, drawing);
 					} else if (drawing.type === 'lines' && drawing.points && drawing.points.length >= 2) {
 						this._drawLineSegment(ctx, chart, series, drawing, plotWidth, plotHeight);
 					} else if (drawing.type === 'ray' && drawing.points && drawing.points.length >= 2) {
@@ -601,6 +604,104 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 			}
 			ctx.restore();
 		}
+	}
+
+	private _drawFibRetracement(
+		ctx: CanvasRenderingContext2D,
+		chart: IChartApi,
+		series: ISeriesApi<'Candlestick'>,
+		drawing: Drawing
+	): void {
+		const ts = chart.timeScale();
+		const startPrice = drawing.startPrice!;
+		const endPrice = drawing.endPrice!;
+		const startX = ts.timeToCoordinate(drawing.startTime as any);
+		const endX = ts.timeToCoordinate(drawing.endTime as any);
+		if (startX == null || endX == null) return;
+		const leftX = Math.min(Number(startX), Number(endX));
+		const rightX = Math.max(Number(startX), Number(endX));
+		const width = rightX - leftX;
+		const range = startPrice - endPrice;
+		const retraceLevels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const;
+		const retracePrices = retraceLevels.map((L) => endPrice + range * L);
+		const extLevels = [1.618, 2.618, 3.618, 4.236] as const;
+		const extPrices = extLevels.map((E) => startPrice + range * (E - 1));
+		const allPrices = [...retracePrices, ...extPrices];
+		const allYCoords = allPrices.map((p) => series.priceToCoordinate(p));
+		if (allYCoords.some((y) => y == null)) return;
+		const allYs = allYCoords as number[];
+		const bandColors = ['rgba(239,68,68,0.35)', 'rgba(249,115,22,0.35)', 'rgba(234,179,8,0.35)', 'rgba(34,197,94,0.35)', 'rgba(59,130,246,0.35)', 'rgba(139,92,246,0.35)'];
+		const strokeColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
+		const extBandColors = ['rgba(192,132,252,0.35)', 'rgba(167,139,250,0.35)', 'rgba(129,140,248,0.35)', 'rgba(99,102,241,0.35)'];
+		const extStrokeColors = ['#c084fc', '#a78bfa', '#818cf8', '#6366f1'];
+		const isHidden = !!drawing.hidden;
+		const opacity = isHidden ? 0.2 : 1;
+		const startY = allYs[6];
+		const endY = allYs[0];
+		for (let i = 0; i < 6; i++) {
+			const yTop = Math.min(allYs[i], allYs[i + 1]);
+			const yBottom = Math.max(allYs[i], allYs[i + 1]);
+			const h = yBottom - yTop;
+			if (h < 0.5) continue;
+			ctx.save();
+			ctx.globalAlpha = opacity;
+			ctx.fillStyle = bandColors[i];
+			ctx.fillRect(leftX, yTop, width, h);
+			ctx.strokeStyle = strokeColors[i];
+			ctx.lineWidth = 1.5;
+			ctx.beginPath();
+			ctx.moveTo(leftX, yTop);
+			ctx.lineTo(rightX, yTop);
+			ctx.stroke();
+			ctx.restore();
+		}
+		ctx.save();
+		ctx.globalAlpha = opacity;
+		ctx.strokeStyle = '#8b5cf6';
+		ctx.lineWidth = 1.5;
+		ctx.beginPath();
+		ctx.moveTo(leftX, allYs[6]);
+		ctx.lineTo(rightX, allYs[6]);
+		ctx.stroke();
+		ctx.restore();
+		for (let i = 0; i < 4; i++) {
+			const yTop = Math.min(allYs[6 + i], allYs[7 + i]);
+			const yBottom = Math.max(allYs[6 + i], allYs[7 + i]);
+			const h = yBottom - yTop;
+			if (h < 0.5) continue;
+			ctx.save();
+			ctx.globalAlpha = opacity;
+			ctx.fillStyle = extBandColors[i];
+			ctx.fillRect(leftX, yTop, width, h);
+			ctx.strokeStyle = extStrokeColors[i];
+			ctx.lineWidth = 1.5;
+			ctx.beginPath();
+			ctx.moveTo(leftX, yTop);
+			ctx.lineTo(rightX, yTop);
+			ctx.stroke();
+			ctx.restore();
+		}
+		ctx.save();
+		ctx.globalAlpha = opacity;
+		ctx.strokeStyle = '#6366f1';
+		ctx.lineWidth = 1.5;
+		ctx.beginPath();
+		ctx.moveTo(leftX, allYs[10]);
+		ctx.lineTo(rightX, allYs[10]);
+		ctx.stroke();
+		ctx.restore();
+		// Dotted line from 1 to 0 (diagonal: left corner level 1 to right corner level 0)
+		ctx.save();
+		ctx.globalAlpha = opacity;
+		ctx.setLineDash([4, 4]);
+		ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+		ctx.lineWidth = 1.5;
+		ctx.beginPath();
+		ctx.moveTo(leftX, startY);
+		ctx.lineTo(rightX, endY);
+		ctx.stroke();
+		ctx.setLineDash([]);
+		ctx.restore();
 	}
 
 	private _drawLineSegment(

@@ -93,16 +93,16 @@ const topTools: ToolButton[] = [
 		),
 	},
 	{
-		id: 'fib',
-		label: 'Fib tool',
+		id: 'fibonacci',
+		label: 'Fibonacci',
 		icon: (
 			<Icon>
-				<path d="M6 7l4 4 4-4 4 4" />
-				<path d="M6 17l4-4 4 4 4-4" />
-				<circle cx="6" cy="7" r="1.0" />
-				<circle cx="10" cy="11" r="1.0" />
-				<circle cx="14" cy="7" r="1.0" />
-				<circle cx="18" cy="11" r="1.0" />
+				<path d="M4 5h16" stroke="currentColor" strokeWidth="1.2" />
+				<path d="M4 10h16" stroke="currentColor" strokeWidth="1.2" />
+				<path d="M4 15h16" stroke="currentColor" strokeWidth="1.2" />
+				<path d="M4 20h16" stroke="currentColor" strokeWidth="1.2" />
+				<circle cx="4" cy="20" r="1.4" fill="white" stroke="currentColor" />
+				<circle cx="20" cy="5" r="1.4" fill="white" stroke="currentColor" />
 			</Icon>
 		),
 	},
@@ -223,6 +223,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const [showShapesMenu, setShowShapesMenu] = useState(false);
 	const [hoveredShapesItemId, setHoveredShapesItemId] = useState<string | null>(null);
 	const [selectedShapesType, setSelectedShapesType] = useState<'brush' | 'rectangle' | 'path' | 'circle'>('brush');
+	const [showFibonacciMenu, setShowFibonacciMenu] = useState(false);
+	const [hoveredFibonacciItemId, setHoveredFibonacciItemId] = useState<string | null>(null);
+	const [selectedFibonacciType, setSelectedFibonacciType] = useState<'fibonacci-retracement'>('fibonacci-retracement');
 	const { activeTool, setActiveTool, selectedDrawingId, drawings, removeDrawing, updateDrawing, setSelectedDrawingId, setSelectedHorizontalLineId, setSelectedHorizontalRayId, setSelectedLineId, selectedEmoji, setSelectedEmoji } =
 		useDrawing();
 
@@ -233,6 +236,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		setShowProjectionMenu(false);
 		setShowShapesMenu(false);
 		setShowLinesMenu(false);
+		setShowFibonacciMenu(false);
 		setShowEmojiPicker(false);
 	};
 
@@ -265,6 +269,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		}
 		if (activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') {
 			setActiveToolId('shapes');
+		}
+		if (activeTool === 'fibonacci-retracement') {
+			setActiveToolId('fibonacci');
 		}
 		if (activeTool === 'emoji') {
 			setActiveToolId('emoji');
@@ -305,6 +312,10 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		{ id: 'rectangle', label: 'Rectangle', icon: 'rectangle' },
 		{ id: 'path', label: 'Path', icon: 'path' },
 		{ id: 'circle', label: 'Circle', icon: 'circle' },
+	];
+
+	const fibonacciMenuItems: Array<{ id: 'fibonacci-retracement'; label: string; icon: string }> = [
+		{ id: 'fibonacci-retracement', label: 'Fibonacci Retracement', icon: 'fibonacci-retracement' },
 	];
 
 	const renderButton = (tool: ToolButton) => {
@@ -392,6 +403,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowProjectionMenu(false);
 							setShowShapesMenu(false);
 							setShowLinesMenu(false);
+							setShowFibonacciMenu(false);
 							setShowEmojiPicker(false);
 							setActiveToolId('crosshair');
 							setActiveTool(null);
@@ -508,6 +520,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowCrosshairMenu(false);
 							setShowShapesMenu(false);
 							setShowLinesMenu(false);
+							setShowFibonacciMenu(false);
 							setShowEmojiPicker(false);
 							setActiveToolId('projection');
 							setActiveTool(selectedProjectionType as any);
@@ -679,6 +692,81 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			);
 		}
 
+		if (tool.id === 'fibonacci') {
+			return (
+				<div key={tool.id} className="relative">
+					<button
+						type="button"
+						aria-label={tool.label}
+						title={tool.label}
+						className={[
+							'h-10 w-10 grid place-items-center rounded-lg transition-colors',
+							activeToolId === 'fibonacci'
+								? 'text-blue-600'
+								: 'text-slate-900 hover:bg-slate-100 active:bg-slate-200',
+						].join(' ')}
+						onClick={() => {
+							setShowCrosshairMenu(false);
+							setShowProjectionMenu(false);
+							setShowShapesMenu(false);
+							setShowLinesMenu(false);
+							setShowEmojiPicker(false);
+							setActiveToolId('fibonacci');
+							setActiveTool(selectedFibonacciType as any);
+							setShowFibonacciMenu((v) => !v);
+						}}
+					>
+						{tool.icon}
+					</button>
+					{showFibonacciMenu && (
+						<div className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[220px] z-50">
+							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
+								Fibonacci
+							</div>
+							{fibonacciMenuItems.map((item) => {
+								const isSelected = selectedFibonacciType === item.id;
+								const isHovered = hoveredFibonacciItemId === item.id;
+								return (
+									<button
+										key={item.id}
+										type="button"
+										onClick={() => {
+											setSelectedFibonacciType(item.id);
+											setActiveTool(item.id as any);
+											setShowFibonacciMenu(false);
+										}}
+										onMouseEnter={() => setHoveredFibonacciItemId(item.id)}
+										onMouseLeave={() => setHoveredFibonacciItemId(null)}
+										className={[
+											'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
+											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
+										].join(' ')}
+									>
+										<span className="flex items-center gap-2">
+											<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+												<path d="M4 5h16" stroke="currentColor" strokeWidth="1.2" />
+												<path d="M4 10h16" stroke="currentColor" strokeWidth="1.2" />
+												<path d="M4 15h16" stroke="currentColor" strokeWidth="1.2" />
+												<path d="M4 20h16" stroke="currentColor" strokeWidth="1.2" />
+												<circle cx="4" cy="20" r="1.4" fill="white" stroke="currentColor" />
+												<circle cx="20" cy="5" r="1.4" fill="white" stroke="currentColor" />
+											</Icon>
+											{item.label}
+										</span>
+										{(isSelected || isHovered) && (
+											<svg className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.2}>
+												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+											</svg>
+										)}
+									</button>
+								);
+							})}
+						</div>
+					)}
+				</div>
+			);
+		}
+
 		if (tool.id === 'shapes') {
 			return (
 				<div key={tool.id} className="relative">
@@ -696,6 +784,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowCrosshairMenu(false);
 							setShowProjectionMenu(false);
 							setShowLinesMenu(false);
+							setShowFibonacciMenu(false);
 							setShowEmojiPicker(false);
 							setActiveToolId('shapes');
 							setActiveTool(selectedShapesType as any);
@@ -857,6 +946,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowCrosshairMenu(false);
 							setShowProjectionMenu(false);
 							setShowShapesMenu(false);
+							setShowFibonacciMenu(false);
 							setShowEmojiPicker(false);
 							setActiveToolId('lines');
 							setActiveTool(selectedLinesType as any);

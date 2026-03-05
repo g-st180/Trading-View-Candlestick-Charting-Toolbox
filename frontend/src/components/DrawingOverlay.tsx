@@ -35,9 +35,14 @@ export interface DrawingOverlayProps {
 	circleLiveEndTimeRef?: React.RefObject<number | null>;
 	circleLiveEndPriceRef?: React.RefObject<number | null>;
 	circleLiveTick?: number;
+	/** Fibonacci Retracement: in-progress drawing id + live end for preview */
+	fibRetracementInProgressIdRef?: React.RefObject<string | null>;
+	fibRetracementLiveEndTimeRef?: React.RefObject<number | null>;
+	fibRetracementLiveEndPriceRef?: React.RefObject<number | null>;
+	fibRetracementLiveTick?: number;
 }
 
-export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0, rectangleInProgressIdRef, rectangleLiveTick = 0, pathInProgressIdRef, pathLiveEndTimeRef, pathLiveEndPriceRef, pathLiveTick = 0, circleInProgressIdRef, circleLiveEndTimeRef, circleLiveEndPriceRef, circleLiveTick = 0 }: DrawingOverlayProps) {
+export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0, rectangleInProgressIdRef, rectangleLiveTick = 0, pathInProgressIdRef, pathLiveEndTimeRef, pathLiveEndPriceRef, pathLiveTick = 0, circleInProgressIdRef, circleLiveEndTimeRef, circleLiveEndPriceRef, circleLiveTick = 0, fibRetracementInProgressIdRef, fibRetracementLiveEndTimeRef, fibRetracementLiveEndPriceRef, fibRetracementLiveTick = 0 }: DrawingOverlayProps) {
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const { drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, updateDrawing } = useDrawing();
 	const drawingsRef = useRef<Drawing[]>([]);
@@ -73,7 +78,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 		// Trigger a repaint whenever drawings or candle data change (for RR outcome dotted line).
 		// priceRangeLiveTick drives smooth price-range live preview.
 		scheduleRedrawRef.current?.();
-	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, rectangleLiveTick, pathLiveTick, circleLiveTick]);
+	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, rectangleLiveTick, pathLiveTick, circleLiveTick, fibRetracementLiveTick]);
 
 	useEffect(() => {
 		if (!canvasRef.current || !containerRef.current) return;
@@ -694,7 +699,8 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			const arrowWidth = 2.5;
 			const arrowLen = 7;
 			// Same perceived look when drawing and when done: use slightly lighter fill when in progress (overlay on top) so it doesn’t look dark
-			const fillOpacity = isInProgress ? 0.18 : 0.25;
+			// In progress: only overlay draws (underlay skips it); use faded opacity to match final look
+			const fillOpacity = isInProgress ? 0.14 : 0.25;
 			const strokeColor = '#3b82f6';
 			if (drawUnderlayOnOverlay) {
 				ctx.fillStyle = `rgba(59, 130, 246, ${fillOpacity})`;
@@ -784,6 +790,145 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 		}
 
 		// ============================================================================
+		// FIBONACCI RETRACEMENT (rainbow bands from level 1 to 0, labels with prices, handles at left of 1 and right of 0, dotted line on 0)
+		// ============================================================================
+		if (drawing.type === 'fibonacci-retracement' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null && chart && series) {
+			ctx.save();
+			const ts = chart.timeScale();
+			const isInProgress = fibRetracementInProgressIdRef?.current === drawing.id;
+			const liveEndTime = isInProgress ? fibRetracementLiveEndTimeRef?.current : null;
+			const liveEndPrice = isInProgress ? fibRetracementLiveEndPriceRef?.current : null;
+			const endTime = liveEndTime ?? drawing.endTime;
+			const endPrice = liveEndPrice ?? drawing.endPrice;
+			const startPrice = drawing.startPrice;
+			const startX = ts.timeToCoordinate(drawing.startTime as any);
+			const startY = series.priceToCoordinate(startPrice);
+			const endX = ts.timeToCoordinate(endTime as any);
+			const endY = series.priceToCoordinate(endPrice);
+			if (startX == null || startY == null || endX == null || endY == null) {
+				ctx.restore();
+				return;
+			}
+			const leftX = Math.min(Number(startX), Number(endX));
+			const rightX = Math.max(Number(startX), Number(endX));
+			const width = rightX - leftX;
+			const range = startPrice - endPrice;
+			// Retracement: 0, 0.236, 0.382, 0.5, 0.618, 0.786, 1. Price(L) = endPrice + range * L
+			const retraceLevels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const;
+			const retracePrices = retraceLevels.map((L) => endPrice + range * L);
+			// Extension below 1: 1.618, 2.618, 3.618, 4.236. Price(E) = startPrice + range * (E - 1)
+			const extLevels = [1.618, 2.618, 3.618, 4.236] as const;
+			const extPrices = extLevels.map((E) => startPrice + range * (E - 1));
+			const allLevels = [...retraceLevels, ...extLevels];
+			const allPrices = [...retracePrices, ...extPrices];
+			const allYCoords = allPrices.map((p) => series.priceToCoordinate(p));
+			if (allYCoords.some((y) => y == null)) {
+				ctx.restore();
+				return;
+			}
+			const allYs = allYCoords as number[];
+			const strokeColors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
+			const extStrokeColors = ['#c084fc', '#a78bfa', '#818cf8', '#6366f1'];
+
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+
+			const drawBandsOnOverlay = !underlayIsPrimitive || isInProgress;
+			const bandFillOpacity = isInProgress ? 0.2 : 0.35;
+			if (drawBandsOnOverlay) {
+				// Retracement bands (0 to 1): 6 bands
+				for (let i = 0; i < 6; i++) {
+					const yTop = Math.min(allYs[i], allYs[i + 1]);
+					const yBottom = Math.max(allYs[i], allYs[i + 1]);
+					const h = yBottom - yTop;
+					if (h < 0.5) continue;
+					const [r, g, b] = [[239, 68, 68], [249, 115, 22], [234, 179, 8], [34, 197, 94], [59, 130, 246], [139, 92, 246]][i];
+					ctx.fillStyle = `rgba(${r},${g},${b},${bandFillOpacity})`;
+					ctx.fillRect(leftX, yTop, width, h);
+					ctx.strokeStyle = strokeColors[i];
+					ctx.lineWidth = 1.5;
+					ctx.beginPath();
+					ctx.moveTo(leftX, yTop);
+					ctx.lineTo(rightX, yTop);
+					ctx.stroke();
+				}
+				ctx.strokeStyle = '#8b5cf6';
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.moveTo(leftX, allYs[6]);
+				ctx.lineTo(rightX, allYs[6]);
+				ctx.stroke();
+				// Extension bands (1 to 1.618, 1.618 to 2.618, 2.618 to 3.618, 3.618 to 4.236): 4 bands
+				for (let i = 0; i < 4; i++) {
+					const yTop = Math.min(allYs[6 + i], allYs[7 + i]);
+					const yBottom = Math.max(allYs[6 + i], allYs[7 + i]);
+					const h = yBottom - yTop;
+					if (h < 0.5) continue;
+					const [r, g, b] = [[192, 132, 252], [167, 139, 250], [129, 140, 248], [99, 102, 241]][i];
+					ctx.fillStyle = `rgba(${r},${g},${b},${bandFillOpacity})`;
+					ctx.fillRect(leftX, yTop, width, h);
+					ctx.strokeStyle = extStrokeColors[i];
+					ctx.lineWidth = 1.5;
+					ctx.beginPath();
+					ctx.moveTo(leftX, yTop);
+					ctx.lineTo(rightX, yTop);
+					ctx.stroke();
+				}
+				ctx.strokeStyle = '#6366f1';
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.moveTo(leftX, allYs[10]);
+				ctx.lineTo(rightX, allYs[10]);
+				ctx.stroke();
+			}
+
+			// Level labels with price in brackets (left side); text color matches the respective block
+			ctx.font = '11px sans-serif';
+			ctx.textAlign = 'right';
+			ctx.textBaseline = 'middle';
+			const labelGapFromEdge = 22;
+			const labelColors = [...strokeColors, strokeColors[5], ...extStrokeColors];
+			for (let i = 0; i < allLevels.length; i++) {
+				const label = allLevels[i] === 1 ? '1' : allLevels[i] === 0 ? '0' : String(allLevels[i]);
+				const priceStr = allPrices[i].toFixed(2);
+				const text = `${label} (${priceStr})`;
+				ctx.fillStyle = labelColors[i] ?? '#1e293b';
+				ctx.fillText(text, leftX - labelGapFromEdge, allYs[i]);
+			}
+
+			// Dotted line from 1 to 0 (diagonal: left corner of level 1 to right corner of level 0, no arrows)
+			ctx.setLineDash([4, 4]);
+			ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+			ctx.lineWidth = 1.5;
+			ctx.beginPath();
+			ctx.moveTo(leftX, startY);
+			ctx.lineTo(rightX, endY);
+			ctx.stroke();
+			ctx.setLineDash([]);
+
+			const shouldShowHandles = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
+			if (shouldShowHandles) {
+				const r = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = '#000000';
+				ctx.lineWidth = 1.5;
+				// Left corner of level 1 (first click)
+				ctx.beginPath();
+				ctx.arc(leftX, startY, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				// Right corner of level 0 (second point)
+				ctx.beginPath();
+				ctx.arc(rightX, endY, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+			}
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
 		// DATE RANGE (horizontal measurer: dynamic rect in time+price, horizontal arrow, label: bars + duration Vol)
 		// ============================================================================
 		if (drawing.type === 'date-range' && drawing.startTime != null && drawing.startPrice != null && chart && series) {
@@ -853,7 +998,8 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			const borderWidth = 2;
 			const arrowWidth = 2.5;
 			const arrowLen = 7;
-			const fillOpacity = isInProgress ? 0.18 : 0.25;
+			// In progress: only overlay draws (underlay skips it); use faded opacity to match final look
+			const fillOpacity = isInProgress ? 0.14 : 0.25;
 			const strokeColor = '#3b82f6';
 			if (drawUnderlayOnOverlay) {
 				ctx.fillStyle = `rgba(59, 130, 246, ${fillOpacity})`;
