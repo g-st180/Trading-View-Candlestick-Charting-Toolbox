@@ -4,6 +4,22 @@ import { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
 
 export type CandleBar = { time: number; open: number; high: number; low: number; close: number; volume?: number };
 
+/** Gann box grid: divisions 0, 0.25, 0.382, 0.5, 0.618, 0.75, 1 on all sides → 6×6 cells. Yellow–green palette. */
+const GANN_FRACTIONS = [0, 0.25, 0.382, 0.5, 0.618, 0.75, 1] as const;
+function gannCellColor(row: number, col: number, opacity: number): string {
+	const idx = row * 6 + col;
+	const hue = 45 + (idx / 36) * 75;
+	return `hsla(${hue}, 58%, 72%, ${opacity})`;
+}
+function gannLabelColor(index: number): string {
+	const hue = 45 + (index / 6) * 75;
+	return `hsl(${hue}, 52%, 32%)`;
+}
+function gannBorderColor(side: 'top' | 'right' | 'bottom' | 'left'): string {
+	const hues = { top: 52, right: 75, bottom: 98, left: 118 };
+	return `hsl(${hues[side]}, 55%, 38%)`;
+}
+
 export interface DrawingOverlayProps {
 	chart: IChartApi | null;
 	series: ISeriesApi<'Candlestick'> | null;
@@ -40,9 +56,12 @@ export interface DrawingOverlayProps {
 	fibRetracementLiveEndTimeRef?: React.RefObject<number | null>;
 	fibRetracementLiveEndPriceRef?: React.RefObject<number | null>;
 	fibRetracementLiveTick?: number;
+	/** Gann box: in-progress drawing id for live preview */
+	gannBoxInProgressIdRef?: React.RefObject<string | null>;
+	gannBoxLiveTick?: number;
 }
 
-export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0, rectangleInProgressIdRef, rectangleLiveTick = 0, pathInProgressIdRef, pathLiveEndTimeRef, pathLiveEndPriceRef, pathLiveTick = 0, circleInProgressIdRef, circleLiveEndTimeRef, circleLiveEndPriceRef, circleLiveTick = 0, fibRetracementInProgressIdRef, fibRetracementLiveEndTimeRef, fibRetracementLiveEndPriceRef, fibRetracementLiveTick = 0 }: DrawingOverlayProps) {
+export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0, rectangleInProgressIdRef, rectangleLiveTick = 0, pathInProgressIdRef, pathLiveEndTimeRef, pathLiveEndPriceRef, pathLiveTick = 0, circleInProgressIdRef, circleLiveEndTimeRef, circleLiveEndPriceRef, circleLiveTick = 0, fibRetracementInProgressIdRef, fibRetracementLiveEndTimeRef, fibRetracementLiveEndPriceRef, fibRetracementLiveTick = 0, gannBoxInProgressIdRef, gannBoxLiveTick = 0 }: DrawingOverlayProps) {
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const { drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, updateDrawing } = useDrawing();
 	const drawingsRef = useRef<Drawing[]>([]);
@@ -78,7 +97,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 		// Trigger a repaint whenever drawings or candle data change (for RR outcome dotted line).
 		// priceRangeLiveTick drives smooth price-range live preview.
 		scheduleRedrawRef.current?.();
-	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, rectangleLiveTick, pathLiveTick, circleLiveTick, fibRetracementLiveTick]);
+	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, rectangleLiveTick, pathLiveTick, circleLiveTick, fibRetracementLiveTick, gannBoxLiveTick]);
 
 	useEffect(() => {
 		if (!canvasRef.current || !containerRef.current) return;
@@ -1180,6 +1199,151 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				drawRectEdgeSquare(right, midY, 'rect-edge-right');
 				drawRectEdgeSquare(midX, top, 'rect-edge-top');
 				drawRectEdgeSquare(midX, bottom, 'rect-edge-bottom');
+			}
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
+		// GANN BOX: filled closed box (like Fib), 4 reposition bubbles at corners only
+		// ============================================================================
+		if (drawing.type === 'gann-box' && chart && series && drawing.startTime != null && drawing.startPrice != null) {
+			const endT = drawing.endTime ?? drawing.startTime;
+			const endP = drawing.endPrice ?? drawing.startPrice;
+			const ts = chart.timeScale();
+			const minT = Math.min(drawing.startTime, endT);
+			const maxT = Math.max(drawing.startTime, endT);
+			const minP = Math.min(drawing.startPrice, endP);
+			const maxP = Math.max(drawing.startPrice, endP);
+			const minX = Number(ts.timeToCoordinate(minT as any));
+			const maxX = Number(ts.timeToCoordinate(maxT as any));
+			const topY = series.priceToCoordinate(maxP);
+			const bottomY = series.priceToCoordinate(minP);
+			if (minX == null || maxX == null || topY == null || bottomY == null) return;
+			const left = Math.min(minX, maxX);
+			const right = Math.max(minX, maxX);
+			const top = Math.min(topY, bottomY);
+			const bottom = Math.max(topY, bottomY);
+			const isInProgress = gannBoxInProgressIdRef?.current === drawing.id;
+			const selected = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
+			const showHandles = selected || isInProgress;
+			const drawBoxOnOverlay = !underlayIsPrimitive || isInProgress;
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+			ctx.strokeStyle = drawing.style?.color || '#6366f1';
+			ctx.lineWidth = drawing.style?.width || 2;
+			const w = right - left;
+			const h = bottom - top;
+			if (drawBoxOnOverlay) {
+				if (w >= 1 && h >= 1) {
+					const cellOpacity = isInProgress ? 0.35 : 0.55;
+					for (let row = 0; row < 6; row++) {
+						const y0 = GANN_FRACTIONS[row];
+						const y1 = GANN_FRACTIONS[row + 1];
+						const cellTop = bottom + (top - bottom) * y1;
+						const cellBottom = bottom + (top - bottom) * y0;
+						const cellH = cellBottom - cellTop;
+						for (let col = 0; col < 6; col++) {
+							const x0 = GANN_FRACTIONS[col];
+							const x1 = GANN_FRACTIONS[col + 1];
+							const cellLeft = left + w * x0;
+							const cellRight = left + w * x1;
+							const cellW = cellRight - cellLeft;
+							ctx.fillStyle = gannCellColor(row, col, cellOpacity);
+							ctx.fillRect(cellLeft, cellTop, cellW, cellH);
+						}
+					}
+					ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+					ctx.lineWidth = 1;
+					for (let i = 0; i < GANN_FRACTIONS.length; i++) {
+						const t = GANN_FRACTIONS[i];
+						const x = left + w * t;
+						ctx.beginPath();
+						ctx.moveTo(x, top);
+						ctx.lineTo(x, bottom);
+						ctx.stroke();
+						const y = bottom + (top - bottom) * t;
+						ctx.beginPath();
+						ctx.moveTo(left, y);
+						ctx.lineTo(right, y);
+						ctx.stroke();
+					}
+					const gannBorderW = drawing.style?.width ?? 2;
+					ctx.lineWidth = gannBorderW;
+					ctx.strokeStyle = gannBorderColor('top');
+					ctx.beginPath();
+					ctx.moveTo(left, top);
+					ctx.lineTo(right, top);
+					ctx.stroke();
+					ctx.strokeStyle = gannBorderColor('right');
+					ctx.beginPath();
+					ctx.moveTo(right, top);
+					ctx.lineTo(right, bottom);
+					ctx.stroke();
+					ctx.strokeStyle = gannBorderColor('bottom');
+					ctx.beginPath();
+					ctx.moveTo(right, bottom);
+					ctx.lineTo(left, bottom);
+					ctx.stroke();
+					ctx.strokeStyle = gannBorderColor('left');
+					ctx.beginPath();
+					ctx.moveTo(left, bottom);
+					ctx.lineTo(left, top);
+					ctx.stroke();
+					// Labels on all four sides – colored like boxes, 12px, more padding
+					ctx.font = '12px sans-serif';
+					const gannPad = 10;
+					const fracLabels = ['0', '0.25', '0.382', '0.5', '0.618', '0.75', '1'];
+					for (let i = 0; i < GANN_FRACTIONS.length; i++) {
+						const t = GANN_FRACTIONS[i];
+						const x = left + w * t;
+						const y = bottom + (top - bottom) * t;
+						ctx.fillStyle = gannLabelColor(i);
+						ctx.textAlign = 'center';
+						ctx.textBaseline = 'top';
+						ctx.fillText(fracLabels[i], x, bottom + gannPad);
+						ctx.textBaseline = 'bottom';
+						ctx.fillText(fracLabels[i], x, top - gannPad);
+						ctx.textAlign = 'right';
+						ctx.textBaseline = 'middle';
+						ctx.fillText(fracLabels[i], left - gannPad, y);
+						ctx.textAlign = 'left';
+						ctx.fillText(fracLabels[i], right + gannPad, y);
+					}
+				} else {
+					const r = 5;
+					ctx.fillStyle = '#ffffff';
+					ctx.strokeStyle = gannBorderColor('top');
+					ctx.lineWidth = 1.5;
+					ctx.beginPath();
+					ctx.arc(left, top, r, 0, 2 * Math.PI);
+					ctx.fill();
+					ctx.stroke();
+				}
+			}
+			if (showHandles) {
+				const handleRadius = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = gannBorderColor('left');
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.arc(left, top, handleRadius, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(right, top, handleRadius, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(left, bottom, handleRadius, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(right, bottom, handleRadius, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
 			}
 			ctx.restore();
 			return;

@@ -118,6 +118,10 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     const fibRetracementLiveEndTimeRef = useRef<number | null>(null);
     const fibRetracementLiveEndPriceRef = useRef<number | null>(null);
     const [fibRetracementLiveTick, setFibRetracementLiveTick] = useState(0);
+    const gannBoxInProgressRef = useRef<string | null>(null);
+    const gannBoxLiveEndTimeRef = useRef<number | null>(null);
+    const gannBoxLiveEndPriceRef = useRef<number | null>(null);
+    const [gannBoxLiveTick, setGannBoxLiveTick] = useState(0);
 
     // Sync horizontal-line drawings to lightweight-charts price markers (right price scale)
     useEffect(() => {
@@ -627,6 +631,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         if (priceRangeInProgressRef.current) ids.add(priceRangeInProgressRef.current);
         if (dateRangeInProgressRef.current) ids.add(dateRangeInProgressRef.current);
         if (fibRetracementInProgressRef.current) ids.add(fibRetracementInProgressRef.current);
+        if (gannBoxInProgressRef.current) ids.add(gannBoxInProgressRef.current);
         underlayDataRef.current.inProgressIds = ids;
         const raw = candlestickDataRef.current ?? [];
         underlayDataRef.current.candlestickData = raw.map((b) => ({
@@ -638,7 +643,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             volume: (b as any).volume,
         }));
         underlayRequestUpdateRef.current.requestUpdate?.();
-    }, [drawings, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, fibRetracementLiveTick]);
+    }, [drawings, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, fibRetracementLiveTick, gannBoxLiveTick]);
 
     // Crosshair style tuning:
     // - Dot mode: hide crosshair lines so the dot is clean (no cross over it)
@@ -853,7 +858,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const handlePointerDown = (e: PointerEvent) => {
             const tool = activeToolRef.current;
-            if (tool !== 'lines' && tool !== 'ray' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position' && tool !== 'short-position' && tool !== 'price-range' && tool !== 'date-range' && tool !== 'fibonacci-retracement' && tool !== 'brush' && tool !== 'rectangle' && tool !== 'path' && tool !== 'circle' && tool !== 'emoji') return;
+            if (tool !== 'lines' && tool !== 'ray' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position' && tool !== 'short-position' && tool !== 'price-range' && tool !== 'date-range' && tool !== 'fibonacci-retracement' && tool !== 'gann-box' && tool !== 'brush' && tool !== 'rectangle' && tool !== 'path' && tool !== 'circle' && tool !== 'emoji') return;
             const { x, y } = getLocalXY(e);
 
             const drawingId = `drawing-${Date.now()}`;
@@ -936,6 +941,36 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 };
                 addDrawingRefFn.current(rectDrawing);
                 rectangleInProgressRef.current = drawingId;
+                return;
+            }
+
+            if (tool === 'gann-box') {
+                e.preventDefault();
+                e.stopPropagation();
+                const chart = chartRef.current;
+                const series = seriesRef.current;
+                if (!chart || !series) return;
+                const time = getTimeFromX(chart, x);
+                const price = series.coordinateToPrice(y);
+                if (time == null || price == null) return;
+
+                if (gannBoxInProgressRef.current) {
+                    const id = gannBoxInProgressRef.current;
+                    updateDrawingRefFn.current(id, (prev) => ({ ...prev, endTime: time, endPrice: price }));
+                    gannBoxInProgressRef.current = null;
+                    setActiveToolRefFn.current(null);
+                    return;
+                }
+
+                const gannDrawing: Drawing = {
+                    id: drawingId,
+                    type: 'gann-box',
+                    startTime: time,
+                    startPrice: price,
+                    style: { color: '#6366f1', width: 2 },
+                };
+                addDrawingRefFn.current(gannDrawing);
+                gannBoxInProgressRef.current = drawingId;
                 return;
             }
 
@@ -1494,6 +1529,25 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     if (endTime != null && endPrice != null) {
                         updateDrawingRefFn.current(rectangleId, (prev) => ({ ...prev, endTime, endPrice }));
                         setRectangleLiveTick((t) => t + 1);
+                    }
+                }
+                return;
+            }
+            const gannBoxId = gannBoxInProgressRef.current;
+            if (gannBoxId && tool === 'gann-box') {
+                e.preventDefault();
+                e.stopPropagation();
+                const chart = chartRef.current;
+                const series = seriesRef.current;
+                if (chart && series) {
+                    const { x, y } = getLocalXY(e);
+                    const endTime = getTimeFromX(chart, x);
+                    const endPrice = series.coordinateToPrice(y);
+                    if (endTime != null && endPrice != null) {
+                        updateDrawingRefFn.current(gannBoxId, (prev) => ({ ...prev, endTime, endPrice }));
+                        gannBoxLiveEndTimeRef.current = endTime;
+                        gannBoxLiveEndPriceRef.current = endPrice;
+                        setGannBoxLiveTick((t) => t + 1);
                     }
                 }
                 return;
@@ -2513,6 +2567,30 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             return null;
         };
 
+        const findHoveredGannBoxId = (localX: number, localY: number): string | null => {
+            const chart = chartRef.current;
+            const series = seriesRef.current;
+            if (!chart || !series) return null;
+            for (const d of drawings) {
+                if (d.type !== 'gann-box' || d.hidden) continue;
+                if (d.startTime == null || d.startPrice == null || d.endTime == null || d.endPrice == null) continue;
+                const ts = chart.timeScale();
+                const minT = Math.min(d.startTime, d.endTime);
+                const maxT = Math.max(d.startTime, d.endTime);
+                const minP = Math.min(d.startPrice, d.endPrice);
+                const maxP = Math.max(d.startPrice, d.endPrice);
+                const minX = Number(ts.timeToCoordinate(minT as any));
+                const maxX = Number(ts.timeToCoordinate(maxT as any));
+                const topY = series.priceToCoordinate(maxP);
+                const bottomY = series.priceToCoordinate(minP);
+                if (minX == null || maxX == null || topY == null || bottomY == null) continue;
+                const xIn = localX >= Math.min(minX, maxX) && localX <= Math.max(minX, maxX);
+                const yIn = localY >= Math.min(topY, bottomY) && localY <= Math.max(topY, bottomY);
+                if (xIn && yIn) return d.id;
+            }
+            return null;
+        };
+
         const findHoveredPathId = (localX: number, localY: number): string | null => {
             const chart = chartRef.current;
             const series = seriesRef.current;
@@ -2638,6 +2716,30 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     bestDist = distRight;
                     bestHandle = `${d.id}:fib-retracement-end`;
                 }
+            }
+
+            // Gann box: 4 corner bubbles only
+            for (const d of drawings) {
+                if (d.type !== 'gann-box' || d.hidden) continue;
+                if (d.startTime == null || d.startPrice == null || d.endTime == null || d.endPrice == null) continue;
+                const ts = chart.timeScale();
+                const minT = Math.min(d.startTime, d.endTime);
+                const maxT = Math.max(d.startTime, d.endTime);
+                const minP = Math.min(d.startPrice, d.endPrice);
+                const maxP = Math.max(d.startPrice, d.endPrice);
+                const minX = Number(ts.timeToCoordinate(minT as any));
+                const maxX = Number(ts.timeToCoordinate(maxT as any));
+                const minY = series.priceToCoordinate(maxP);
+                const maxY = series.priceToCoordinate(minP);
+                if (minX == null || maxX == null || minY == null || maxY == null) continue;
+                const distTL = Math.hypot(localX - minX, localY - minY);
+                const distTR = Math.hypot(localX - maxX, localY - minY);
+                const distBL = Math.hypot(localX - minX, localY - maxY);
+                const distBR = Math.hypot(localX - maxX, localY - maxY);
+                if (distTL <= handleRadius && distTL < bestDist) { bestDist = distTL; bestHandle = `${d.id}:gann-corner-tl`; }
+                if (distTR <= handleRadius && distTR < bestDist) { bestDist = distTR; bestHandle = `${d.id}:gann-corner-tr`; }
+                if (distBL <= handleRadius && distBL < bestDist) { bestDist = distBL; bestHandle = `${d.id}:gann-corner-bl`; }
+                if (distBR <= handleRadius && distBR < bestDist) { bestDist = distBR; bestHandle = `${d.id}:gann-corner-br`; }
             }
 
             // Rectangle: 4 corner bubbles (circle) + 4 edge-center squares
@@ -2862,7 +2964,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerMove = (e: PointerEvent) => {
             // Don't do hover detection while a drawing tool is active
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'fibonacci-retracement' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'fibonacci-retracement' || activeTool === 'gann-box' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle' || activeTool === 'emoji') return;
 
             const { x, y } = getLocalXY(e);
 
@@ -2925,6 +3027,13 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 return;
             }
 
+            // Then check gann box body
+            const gannBoxId = findHoveredGannBoxId(x, y);
+            if (gannBoxId) {
+                setHoveredLineId(gannBoxId);
+                return;
+            }
+
             // Then check circle body
             const circleId = findHoveredCircleId(x, y);
             if (circleId) {
@@ -2951,11 +3060,11 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerDown = (e: PointerEvent) => {
             // If user is in a drawing tool, ignore selection logic
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'fibonacci-retracement' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle' || activeTool === 'emoji') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'fibonacci-retracement' || activeTool === 'gann-box' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle' || activeTool === 'emoji') return;
 
             const { x, y } = getLocalXY(e);
             const handleId = findHoveredHandle(x, y);
-            const lineId = handleId ? handleId.split(':')[0] : (findHoveredPriceRangeId(x, y) ?? findHoveredDateRangeId(x, y) ?? findHoveredFibRetracementId(x, y) ?? findHoveredBrushId(x, y) ?? findHoveredRectangleId(x, y) ?? findHoveredCircleId(x, y) ?? findHoveredPathId(x, y) ?? findHoveredLineId(x, y));
+            const lineId = handleId ? handleId.split(':')[0] : (findHoveredPriceRangeId(x, y) ?? findHoveredDateRangeId(x, y) ?? findHoveredFibRetracementId(x, y) ?? findHoveredGannBoxId(x, y) ?? findHoveredBrushId(x, y) ?? findHoveredRectangleId(x, y) ?? findHoveredCircleId(x, y) ?? findHoveredPathId(x, y) ?? findHoveredLineId(x, y));
 
             // Check if clicking on a long-position handle
             if (handleId && (handleId.includes(':top-left') || handleId.includes(':bottom-left') || handleId.includes(':right-middle') || handleId.includes(':left-middle'))) {
@@ -2993,6 +3102,15 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 return;
             }
 
+            // Check if clicking on a gann box corner handle
+            if (handleId && (handleId.includes(':gann-corner-tl') || handleId.includes(':gann-corner-tr') || handleId.includes(':gann-corner-bl') || handleId.includes(':gann-corner-br'))) {
+                setSelectedLineId(lineId);
+                setSelectedDrawingId(lineId);
+                setSelectedHorizontalLineId(null);
+                setSelectedHorizontalRayId(null);
+                return;
+            }
+
             if (lineId) {
                 setSelectedLineId(lineId);
                 setSelectedDrawingId(lineId);
@@ -3005,7 +3123,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                         setSelectedLineId(null);
                         // Only clear selectedDrawingId if it's currently a lines, ray, long-position, short-position, or price-range tool
                         const currentSelected = drawings.find(d => d.id === selectedDrawingId);
-                        if (currentSelected?.type === 'lines' || currentSelected?.type === 'ray' || currentSelected?.type === 'long-position' || currentSelected?.type === 'short-position' || currentSelected?.type === 'price-range' || currentSelected?.type === 'date-range' || currentSelected?.type === 'fibonacci-retracement' || currentSelected?.type === 'brush' || currentSelected?.type === 'rectangle' || currentSelected?.type === 'path' || currentSelected?.type === 'circle') {
+                        if (currentSelected?.type === 'lines' || currentSelected?.type === 'ray' || currentSelected?.type === 'long-position' || currentSelected?.type === 'short-position' || currentSelected?.type === 'price-range' || currentSelected?.type === 'date-range' || currentSelected?.type === 'fibonacci-retracement' || currentSelected?.type === 'gann-box' || currentSelected?.type === 'brush' || currentSelected?.type === 'rectangle' || currentSelected?.type === 'path' || currentSelected?.type === 'circle') {
                             setSelectedDrawingId(null);
                         }
                     }
@@ -3034,7 +3152,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     // NOTE: Also handles line body drag (moving entire line)
     // NOTE: Also handles parallel-channel body drag (moving entire channel)
     // NOTE: Also handles long-position body drag (moving entire RR box)
-    const draggingLineHandleRef = useRef<{ lineId: string; handle: 'start' | 'end' | 'start1' | 'end1' | 'start2' | 'end2' | 'mid1' | 'mid2' | 'top-left' | 'bottom-left' | 'right-middle' | 'left-middle' | 'line-body' | 'parallel-channel-body' | 'long-position-body' | 'price-range-body' | 'price-range-start' | 'price-range-end' | 'date-range-body' | 'date-range-start' | 'date-range-end' | 'fib-retracement-body' | 'fib-retracement-start' | 'fib-retracement-end' | 'brush-body' | 'rectangle-body' | 'rect-corner-tl' | 'rect-corner-tr' | 'rect-corner-bl' | 'rect-corner-br' | 'rect-edge-left' | 'rect-edge-right' | 'rect-edge-top' | 'rect-edge-bottom' | 'path-body' | 'path-vertex' | 'circle-body' | 'circle-center' | 'circle-radius'; pathVertexIndex?: number; initialClickTime?: number; initialClickPrice?: number; initialStartTime?: number; initialStartPrice?: number; initialEndTime?: number; initialEndPrice?: number; initialStart1Time?: number; initialStart1Price?: number; initialEnd1Time?: number; initialEnd1Price?: number; initialStart2Time?: number; initialStart2Price?: number; initialEnd2Time?: number; initialEnd2Price?: number; initialEntryPrice?: number; initialStopLoss?: number; initialTakeProfit?: number; initialLongPositionStartTime?: number; initialLongPositionEndTime?: number; initialPointerX?: number; initialPointerY?: number; initialScreenPoints?: { x: number; y: number }[]; initialChartPoints?: { time: number; price: number }[] } | null>(null);
+    const draggingLineHandleRef = useRef<{ lineId: string; handle: 'start' | 'end' | 'start1' | 'end1' | 'start2' | 'end2' | 'mid1' | 'mid2' | 'top-left' | 'bottom-left' | 'right-middle' | 'left-middle' | 'line-body' | 'parallel-channel-body' | 'long-position-body' | 'price-range-body' | 'price-range-start' | 'price-range-end' | 'date-range-body' | 'date-range-start' | 'date-range-end' | 'fib-retracement-body' | 'fib-retracement-start' | 'fib-retracement-end' | 'gann-box-body' | 'gann-corner-tl' | 'gann-corner-tr' | 'gann-corner-bl' | 'gann-corner-br' | 'brush-body' | 'rectangle-body' | 'rect-corner-tl' | 'rect-corner-tr' | 'rect-corner-bl' | 'rect-corner-br' | 'rect-edge-left' | 'rect-edge-right' | 'rect-edge-top' | 'rect-edge-bottom' | 'path-body' | 'path-vertex' | 'circle-body' | 'circle-center' | 'circle-radius'; pathVertexIndex?: number; initialClickTime?: number; initialClickPrice?: number; initialStartTime?: number; initialStartPrice?: number; initialEndTime?: number; initialEndPrice?: number; initialStart1Time?: number; initialStart1Price?: number; initialEnd1Time?: number; initialEnd1Price?: number; initialStart2Time?: number; initialStart2Price?: number; initialEnd2Time?: number; initialEnd2Price?: number; initialEntryPrice?: number; initialStopLoss?: number; initialTakeProfit?: number; initialLongPositionStartTime?: number; initialLongPositionEndTime?: number; initialPointerX?: number; initialPointerY?: number; initialScreenPoints?: { x: number; y: number }[]; initialChartPoints?: { time: number; price: number }[] } | null>(null);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -3308,8 +3426,8 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const startDrag = (e: PointerEvent) => {
             // don't interfere with drawing tools
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'fibonacci-retracement' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') return;
-            
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'fibonacci-retracement' || activeTool === 'gann-box' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') return;
+
             const { x, y } = getLocalXY(e);
             const chart = chartRef.current;
             const series = seriesRef.current;
@@ -3538,6 +3656,71 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 };
                 setSelectedLineId(fibBodyId);
                 setSelectedDrawingId(fibBodyId);
+
+                try {
+                    container.setPointerCapture(e.pointerId);
+                } catch {
+                    // ignore
+                }
+                const chartContainer = (chart as any).chartElement?.parentElement || container;
+                if (chartContainer) {
+                    const canvas = chartContainer.querySelector('canvas');
+                    if (canvas) {
+                        (canvas as any).__originalPointerEvents = canvas.style.pointerEvents;
+                        canvas.style.pointerEvents = 'none';
+                    }
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Click on gann box body: start body drag (move whole gann box in chart space)
+            const findHoveredGannBoxIdDrag = (localX: number, localY: number): string | null => {
+                for (const d of drawings) {
+                    if (d.type !== 'gann-box' || d.hidden) continue;
+                    if (d.startTime == null || d.startPrice == null || d.endTime == null || d.endPrice == null) continue;
+                    const ts = chart.timeScale();
+                    const minT = Math.min(d.startTime, d.endTime);
+                    const maxT = Math.max(d.startTime, d.endTime);
+                    const minP = Math.min(d.startPrice, d.endPrice);
+                    const maxP = Math.max(d.startPrice, d.endPrice);
+                    const minX = Number(ts.timeToCoordinate(minT as any));
+                    const maxX = Number(ts.timeToCoordinate(maxT as any));
+                    const topY = series.priceToCoordinate(maxP);
+                    const bottomY = series.priceToCoordinate(minP);
+                    if (minX == null || maxX == null || topY == null || bottomY == null) continue;
+                    const xIn = localX >= Math.min(minX, maxX) && localX <= Math.max(minX, maxX);
+                    const yIn = localY >= Math.min(topY, bottomY) && localY <= Math.max(topY, bottomY);
+                    if (xIn && yIn) return d.id;
+                }
+                return null;
+            };
+            const gannBoxBodyId = findHoveredGannBoxIdDrag(x, y);
+            if (gannBoxBodyId) {
+                const targetDrawing = drawings.find((d) => d.id === gannBoxBodyId);
+                if (!targetDrawing || targetDrawing.locked) return;
+                if (targetDrawing.type !== 'gann-box' || targetDrawing.startTime == null || targetDrawing.startPrice == null || targetDrawing.endTime == null || targetDrawing.endPrice == null) {
+                    setSelectedLineId(gannBoxBodyId);
+                    setSelectedDrawingId(gannBoxBodyId);
+                    return;
+                }
+                const clickTime = getTimeFromX(chart, x);
+                const clickPrice = series.coordinateToPrice(y);
+                if (clickTime == null || clickPrice == null) return;
+
+                draggingLineHandleRef.current = {
+                    lineId: gannBoxBodyId,
+                    handle: 'gann-box-body',
+                    initialClickTime: clickTime,
+                    initialClickPrice: clickPrice,
+                    initialStartTime: targetDrawing.startTime,
+                    initialStartPrice: targetDrawing.startPrice,
+                    initialEndTime: targetDrawing.endTime,
+                    initialEndPrice: targetDrawing.endPrice,
+                };
+                setSelectedLineId(gannBoxBodyId);
+                setSelectedDrawingId(gannBoxBodyId);
 
                 try {
                     container.setPointerCapture(e.pointerId);
@@ -4068,6 +4251,31 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 return;
             }
 
+            // Handle gann box body drag (moving entire gann box in chart space)
+            if (drag.handle === 'gann-box-body') {
+                if (drag.initialClickTime == null || drag.initialClickPrice == null ||
+                    drag.initialStartTime == null || drag.initialStartPrice == null ||
+                    drag.initialEndTime == null || drag.initialEndPrice == null) return;
+                const currentTime = getTimeFromX(chart, x);
+                const currentPrice = series.coordinateToPrice(y);
+                if (currentTime == null || currentPrice == null) return;
+                const timeOffset = currentTime - drag.initialClickTime;
+                const priceOffset = currentPrice - drag.initialClickPrice;
+                updateDrawing(drag.lineId, (prev) => {
+                    if (prev.type === 'gann-box') {
+                        return {
+                            ...prev,
+                            startTime: drag.initialStartTime! + timeOffset,
+                            startPrice: drag.initialStartPrice! + priceOffset,
+                            endTime: drag.initialEndTime! + timeOffset,
+                            endPrice: drag.initialEndPrice! + priceOffset,
+                        };
+                    }
+                    return prev;
+                });
+                return;
+            }
+
             // Handle circle body drag (moving entire circle in chart space)
             if (drag.handle === 'circle-body') {
                 if (drag.initialClickTime == null || drag.initialClickPrice == null ||
@@ -4190,6 +4398,29 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                         case 'rect-edge-right': return { ...prev, startTime: minT, endTime: currentTime };
                         case 'rect-edge-top': return { ...prev, startPrice: minP, endPrice: currentPrice };
                         case 'rect-edge-bottom': return { ...prev, startPrice: currentPrice, endPrice: maxP };
+                        default: return prev;
+                    }
+                });
+                return;
+            }
+
+            // Handle gann box corner resize (4 corners only)
+            const gannHandle = drag.handle as string;
+            if (gannHandle.startsWith('gann-corner-')) {
+                const currentTime = getTimeFromX(chart, x);
+                const currentPrice = series.coordinateToPrice(y);
+                if (currentTime == null || currentPrice == null) return;
+                updateDrawing(drag.lineId, (prev) => {
+                    if (prev.type !== 'gann-box' || prev.startTime == null || prev.startPrice == null || prev.endTime == null || prev.endPrice == null) return prev;
+                    const minT = Math.min(prev.startTime, prev.endTime);
+                    const maxT = Math.max(prev.startTime, prev.endTime);
+                    const minP = Math.min(prev.startPrice, prev.endPrice);
+                    const maxP = Math.max(prev.startPrice, prev.endPrice);
+                    switch (drag.handle) {
+                        case 'gann-corner-tl': return { ...prev, startTime: currentTime, endPrice: currentPrice, endTime: maxT, startPrice: minP };
+                        case 'gann-corner-tr': return { ...prev, endTime: currentTime, endPrice: currentPrice, startTime: minT, startPrice: minP };
+                        case 'gann-corner-bl': return { ...prev, startTime: currentTime, startPrice: currentPrice, endTime: maxT, endPrice: maxP };
+                        case 'gann-corner-br': return { ...prev, endTime: currentTime, startPrice: currentPrice, startTime: minT, endPrice: maxP };
                         default: return prev;
                     }
                 });
@@ -4650,7 +4881,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             // White hand cursor (grab) when hovering lines, ray, parallel channel, or long-position
             // Check if we're currently dragging a line body, parallel channel body, or long-position body
             const dragHandle = draggingLineHandleRef.current?.handle;
-            if (dragHandle === 'line-body' || dragHandle === 'parallel-channel-body' || dragHandle === 'long-position-body' || dragHandle === 'price-range-body' || dragHandle === 'date-range-body' || dragHandle === 'fib-retracement-body' || dragHandle === 'brush-body' || dragHandle === 'rectangle-body' || dragHandle === 'circle-body' || dragHandle === 'path-body') {
+            if (dragHandle === 'line-body' || dragHandle === 'parallel-channel-body' || dragHandle === 'long-position-body' || dragHandle === 'price-range-body' || dragHandle === 'date-range-body' || dragHandle === 'fib-retracement-body' || dragHandle === 'gann-box-body' || dragHandle === 'brush-body' || dragHandle === 'rectangle-body' || dragHandle === 'circle-body' || dragHandle === 'path-body') {
                 cursorStyle = 'grabbing';
             } else {
                 cursorStyle = 'grab';
@@ -4728,6 +4959,8 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 fibRetracementLiveEndTimeRef={fibRetracementLiveEndTimeRef}
                 fibRetracementLiveEndPriceRef={fibRetracementLiveEndPriceRef}
                 fibRetracementLiveTick={fibRetracementLiveTick}
+                gannBoxInProgressIdRef={gannBoxInProgressRef}
+                gannBoxLiveTick={gannBoxLiveTick}
             />
         </div>
     );

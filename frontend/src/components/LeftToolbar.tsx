@@ -225,7 +225,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const [selectedShapesType, setSelectedShapesType] = useState<'brush' | 'rectangle' | 'path' | 'circle'>('brush');
 	const [showFibonacciMenu, setShowFibonacciMenu] = useState(false);
 	const [hoveredFibonacciItemId, setHoveredFibonacciItemId] = useState<string | null>(null);
-	const [selectedFibonacciType, setSelectedFibonacciType] = useState<'fibonacci-retracement'>('fibonacci-retracement');
+	const [selectedFibonacciType, setSelectedFibonacciType] = useState<'fibonacci-retracement' | 'gann-box'>('fibonacci-retracement');
 	const { activeTool, setActiveTool, selectedDrawingId, drawings, removeDrawing, updateDrawing, setSelectedDrawingId, setSelectedHorizontalLineId, setSelectedHorizontalRayId, setSelectedLineId, selectedEmoji, setSelectedEmoji } =
 		useDrawing();
 
@@ -270,8 +270,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		if (activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') {
 			setActiveToolId('shapes');
 		}
-		if (activeTool === 'fibonacci-retracement') {
+		if (activeTool === 'fibonacci-retracement' || activeTool === 'gann-box') {
 			setActiveToolId('fibonacci');
+			setSelectedFibonacciType(activeTool === 'gann-box' ? 'gann-box' : 'fibonacci-retracement');
 		}
 		if (activeTool === 'emoji') {
 			setActiveToolId('emoji');
@@ -314,8 +315,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		{ id: 'circle', label: 'Circle', icon: 'circle' },
 	];
 
-	const fibonacciMenuItems: Array<{ id: 'fibonacci-retracement'; label: string; icon: string }> = [
+	const fibonacciMenuItems: Array<{ id: 'fibonacci-retracement' | 'gann-box'; label: string; icon: string }> = [
 		{ id: 'fibonacci-retracement', label: 'Fibonacci Retracement', icon: 'fibonacci-retracement' },
+		{ id: 'gann-box', label: 'Gann box', icon: 'gann-box' },
 	];
 
 	const renderButton = (tool: ToolButton) => {
@@ -716,7 +718,17 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowFibonacciMenu((v) => !v);
 						}}
 					>
-						{tool.icon}
+						{selectedFibonacciType === 'gann-box' ? (
+							<Icon className="h-7 w-7" strokeWidth={1}>
+								<rect x="4" y="4" width="16" height="16" fill="currentColor" opacity={0.25} stroke="currentColor" strokeWidth="1.2" />
+								<circle cx="4" cy="4" r="1.4" fill="white" stroke="currentColor" />
+								<circle cx="20" cy="4" r="1.4" fill="white" stroke="currentColor" />
+								<circle cx="4" cy="20" r="1.4" fill="white" stroke="currentColor" />
+								<circle cx="20" cy="20" r="1.4" fill="white" stroke="currentColor" />
+							</Icon>
+						) : (
+							tool.icon
+						)}
 					</button>
 					{showFibonacciMenu && (
 						<div className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[280px] z-50">
@@ -743,14 +755,24 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										].join(' ')}
 									>
 										<span className="flex items-center gap-2 whitespace-nowrap">
-											<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
-												<path d="M4 5h16" stroke="currentColor" strokeWidth="1.2" />
-												<path d="M4 10h16" stroke="currentColor" strokeWidth="1.2" />
-												<path d="M4 15h16" stroke="currentColor" strokeWidth="1.2" />
-												<path d="M4 20h16" stroke="currentColor" strokeWidth="1.2" />
-												<circle cx="4" cy="20" r="1.4" fill="white" stroke="currentColor" />
-												<circle cx="20" cy="5" r="1.4" fill="white" stroke="currentColor" />
-											</Icon>
+											{item.icon === 'gann-box' ? (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+													<rect x="4" y="4" width="16" height="16" fill="currentColor" opacity={0.25} stroke="currentColor" strokeWidth="1.2" />
+													<circle cx="4" cy="4" r="1.4" fill="white" stroke="currentColor" />
+													<circle cx="20" cy="4" r="1.4" fill="white" stroke="currentColor" />
+													<circle cx="4" cy="20" r="1.4" fill="white" stroke="currentColor" />
+													<circle cx="20" cy="20" r="1.4" fill="white" stroke="currentColor" />
+												</Icon>
+											) : (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+													<path d="M4 5h16" stroke="currentColor" strokeWidth="1.2" />
+													<path d="M4 10h16" stroke="currentColor" strokeWidth="1.2" />
+													<path d="M4 15h16" stroke="currentColor" strokeWidth="1.2" />
+													<path d="M4 20h16" stroke="currentColor" strokeWidth="1.2" />
+													<circle cx="4" cy="20" r="1.4" fill="white" stroke="currentColor" />
+													<circle cx="20" cy="5" r="1.4" fill="white" stroke="currentColor" />
+												</Icon>
+											)}
 											{item.label}
 										</span>
 										{(isSelected || isHovered) && (

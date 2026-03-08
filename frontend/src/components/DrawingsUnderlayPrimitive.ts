@@ -71,7 +71,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		const underlayDrawings = drawings.filter(
 			(d) => !d.hidden && !inProgress.has(d.id) && (
 				d.type === 'long-position' || d.type === 'short-position' || d.type === 'parallel-channel' ||
-				d.type === 'price-range' || d.type === 'date-range' || d.type === 'fibonacci-retracement' ||
+				d.type === 'price-range' || d.type === 'date-range' || d.type === 'fibonacci-retracement' || d.type === 'gann-box' ||
 				d.type === 'lines' || d.type === 'ray' || d.type === 'horizontal-line' || d.type === 'horizontal-ray'
 			)
 		);
@@ -100,6 +100,8 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 						this._drawDateRange(ctx, chart, series, drawing);
 					} else if (drawing.type === 'fibonacci-retracement' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
 						this._drawFibRetracement(ctx, chart, series, drawing);
+					} else if (drawing.type === 'gann-box' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
+						this._drawGannBox(ctx, chart, series, drawing);
 					} else if (drawing.type === 'lines' && drawing.points && drawing.points.length >= 2) {
 						this._drawLineSegment(ctx, chart, series, drawing, plotWidth, plotHeight);
 					} else if (drawing.type === 'ray' && drawing.points && drawing.points.length >= 2) {
@@ -701,6 +703,146 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		ctx.lineTo(rightX, endY);
 		ctx.stroke();
 		ctx.setLineDash([]);
+		ctx.restore();
+	}
+
+	/** Gann box: divisions 0, 0.25, 0.382, 0.5, 0.618, 0.75, 1 on all sides → 6×6 grid; corners (0,0)=bl, (0,1)=tl, (1,0)=br, (1,1)=tr */
+	private static readonly GANN_FRACTIONS = [0, 0.25, 0.382, 0.5, 0.618, 0.75, 1] as const;
+
+	/** Yellow–green palette: hues 45 (yellow) to 120 (green) */
+	private static _gannCellColor(row: number, col: number): string {
+		const idx = row * 6 + col;
+		const hue = 45 + (idx / 36) * 75;
+		return `hsla(${hue}, 58%, 72%, 0.55)`;
+	}
+
+	/** Label color for each division index (0..6) – yellow–green palette, solid for readability */
+	private static _gannLabelColor(index: number): string {
+		const hue = 45 + (index / 6) * 75;
+		return `hsl(${hue}, 52%, 32%)`;
+	}
+
+	/** Outer border: each side its own color from yellow–green palette (top, right, bottom, left) */
+	private static _gannBorderColor(side: 'top' | 'right' | 'bottom' | 'left'): string {
+		const hues = { top: 52, right: 75, bottom: 98, left: 118 };
+		return `hsl(${hues[side]}, 55%, 38%)`;
+	}
+
+	private _drawGannBox(
+		ctx: CanvasRenderingContext2D,
+		chart: IChartApi,
+		series: ISeriesApi<'Candlestick'>,
+		drawing: Drawing
+	): void {
+		const ts = chart.timeScale();
+		const minT = Math.min(drawing.startTime!, drawing.endTime!);
+		const maxT = Math.max(drawing.startTime!, drawing.endTime!);
+		const minP = Math.min(drawing.startPrice!, drawing.endPrice!);
+		const maxP = Math.max(drawing.startPrice!, drawing.endPrice!);
+		const leftX = Number(ts.timeToCoordinate(minT as any));
+		const rightX = Number(ts.timeToCoordinate(maxT as any));
+		const topY = series.priceToCoordinate(maxP);
+		const bottomY = series.priceToCoordinate(minP);
+		if (leftX == null || rightX == null || topY == null || bottomY == null) return;
+		const left = Math.min(leftX, rightX);
+		const right = Math.max(leftX, rightX);
+		const top = Math.min(topY, bottomY);
+		const bottom = Math.max(topY, bottomY);
+		const w = right - left;
+		const h = bottom - top;
+		if (w < 1 || h < 1) return;
+		const isHidden = !!drawing.hidden;
+		const opacity = isHidden ? 0.4 : 1;
+		const fractions = DrawingsUnderlayPrimitive.GANN_FRACTIONS;
+
+		ctx.save();
+		ctx.globalAlpha = opacity;
+
+		// Draw each cell with a different color (y=0 at bottom, y=1 at top → row 0 is bottom)
+		for (let row = 0; row < 6; row++) {
+			const y0 = fractions[row];
+			const y1 = fractions[row + 1];
+			const cellTop = bottom + (top - bottom) * y1;
+			const cellBottom = bottom + (top - bottom) * y0;
+			const cellH = cellBottom - cellTop;
+			for (let col = 0; col < 6; col++) {
+				const x0 = fractions[col];
+				const x1 = fractions[col + 1];
+				const cellLeft = left + w * x0;
+				const cellRight = left + w * x1;
+				const cellW = cellRight - cellLeft;
+				ctx.fillStyle = DrawingsUnderlayPrimitive._gannCellColor(row, col);
+				ctx.fillRect(cellLeft, cellTop, cellW, cellH);
+			}
+		}
+
+		// Grid lines at all division points (horizontal and vertical)
+		ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+		ctx.lineWidth = 1;
+		for (let i = 0; i < fractions.length; i++) {
+			const t = fractions[i];
+			// Vertical line at x = t
+			const x = left + w * t;
+			ctx.beginPath();
+			ctx.moveTo(x, top);
+			ctx.lineTo(x, bottom);
+			ctx.stroke();
+			// Horizontal line at y = t
+			const y = bottom + (top - bottom) * t;
+			ctx.beginPath();
+			ctx.moveTo(left, y);
+			ctx.lineTo(right, y);
+			ctx.stroke();
+		}
+
+		// Outer border: each side its own color (yellow–green palette, no blue)
+		const borderW = drawing.style?.width ?? 2;
+		ctx.lineWidth = borderW;
+		ctx.strokeStyle = DrawingsUnderlayPrimitive._gannBorderColor('top');
+		ctx.beginPath();
+		ctx.moveTo(left, top);
+		ctx.lineTo(right, top);
+		ctx.stroke();
+		ctx.strokeStyle = DrawingsUnderlayPrimitive._gannBorderColor('right');
+		ctx.beginPath();
+		ctx.moveTo(right, top);
+		ctx.lineTo(right, bottom);
+		ctx.stroke();
+		ctx.strokeStyle = DrawingsUnderlayPrimitive._gannBorderColor('bottom');
+		ctx.beginPath();
+		ctx.moveTo(right, bottom);
+		ctx.lineTo(left, bottom);
+		ctx.stroke();
+		ctx.strokeStyle = DrawingsUnderlayPrimitive._gannBorderColor('left');
+		ctx.beginPath();
+		ctx.moveTo(left, bottom);
+		ctx.lineTo(left, top);
+		ctx.stroke();
+
+		// Labels on all four sides: 0, 0.25, 0.382, 0.5, 0.618, 0.75, 1 – colored like boxes, slightly larger, more padding
+		ctx.font = '12px sans-serif';
+		const pad = 10;
+		const fracLabels = ['0', '0.25', '0.382', '0.5', '0.618', '0.75', '1'];
+		for (let i = 0; i < fractions.length; i++) {
+			const t = fractions[i];
+			const x = left + w * t;
+			const y = bottom + (top - bottom) * t;
+			ctx.fillStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : DrawingsUnderlayPrimitive._gannLabelColor(i);
+			// Bottom
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'top';
+			ctx.fillText(fracLabels[i], x, bottom + pad);
+			// Top
+			ctx.textBaseline = 'bottom';
+			ctx.fillText(fracLabels[i], x, top - pad);
+			// Left
+			ctx.textAlign = 'right';
+			ctx.textBaseline = 'middle';
+			ctx.fillText(fracLabels[i], left - pad, y);
+			// Right
+			ctx.textAlign = 'left';
+			ctx.fillText(fracLabels[i], right + pad, y);
+		}
 		ctx.restore();
 	}
 
