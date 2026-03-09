@@ -71,7 +71,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		const underlayDrawings = drawings.filter(
 			(d) => !d.hidden && !inProgress.has(d.id) && (
 				d.type === 'long-position' || d.type === 'short-position' || d.type === 'parallel-channel' ||
-				d.type === 'price-range' || d.type === 'date-range' || d.type === 'fibonacci-retracement' || d.type === 'gann-box' ||
+				d.type === 'price-range' || d.type === 'date-range' || d.type === 'date-price-range' || d.type === 'fibonacci-retracement' || d.type === 'gann-box' ||
 				d.type === 'lines' || d.type === 'ray' || d.type === 'horizontal-line' || d.type === 'horizontal-ray'
 			)
 		);
@@ -98,6 +98,8 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 						this._drawPriceRange(ctx, chart, series, drawing);
 					} else if (drawing.type === 'date-range' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
 						this._drawDateRange(ctx, chart, series, drawing);
+					} else if (drawing.type === 'date-price-range' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
+						this._drawDatePriceRange(ctx, chart, series, drawing);
 					} else if (drawing.type === 'fibonacci-retracement' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
 						this._drawFibRetracement(ctx, chart, series, drawing);
 					} else if (drawing.type === 'gann-box' && drawing.startTime != null && drawing.startPrice != null && drawing.endTime != null && drawing.endPrice != null) {
@@ -465,12 +467,12 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		const maxY = Math.max(startY, endY);
 		const isHidden = !!drawing.hidden;
 		const lineColor = isHidden ? 'rgba(59, 130, 246, 0.6)' : '#3b82f6';
-		const borderWidth = 2;
-		const arrowWidth = 2.5;
+		const borderWidth = 1.5;
+		const arrowWidth = 2;
 		const arrowLen = 7;
 
 		ctx.save();
-		ctx.fillStyle = isHidden ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.25)';
+		ctx.fillStyle = isHidden ? 'rgba(59, 130, 246, 0.12)' : 'rgba(59, 130, 246, 0.14)';
 		ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
 		ctx.restore();
 
@@ -546,12 +548,12 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		const maxY = Math.max(startY, endY);
 		const isHidden = !!drawing.hidden;
 		const lineColor = isHidden ? 'rgba(59, 130, 246, 0.6)' : '#3b82f6';
-		const borderWidth = 2;
-		const arrowWidth = 2.5;
+		const borderWidth = 1.5;
+		const arrowWidth = 2;
 		const arrowLen = 7;
 
 		ctx.save();
-		ctx.fillStyle = isHidden ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.25)';
+		ctx.fillStyle = isHidden ? 'rgba(59, 130, 246, 0.12)' : 'rgba(59, 130, 246, 0.14)';
 		ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
 		ctx.restore();
 
@@ -583,6 +585,110 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 			ctx.stroke();
 			ctx.restore();
 
+			const endIsRight = (drawing.endTime as number) > (drawing.startTime as number);
+			ctx.save();
+			ctx.strokeStyle = lineColor;
+			ctx.lineWidth = arrowWidth;
+			ctx.lineCap = 'round';
+			ctx.lineJoin = 'round';
+			if (endIsRight) {
+				ctx.beginPath();
+				ctx.moveTo(maxX, midY);
+				ctx.lineTo(maxX - arrowLen, midY - arrowLen * 0.6);
+				ctx.moveTo(maxX, midY);
+				ctx.lineTo(maxX - arrowLen, midY + arrowLen * 0.6);
+				ctx.stroke();
+			} else {
+				ctx.beginPath();
+				ctx.moveTo(minX, midY);
+				ctx.lineTo(minX + arrowLen, midY - arrowLen * 0.6);
+				ctx.moveTo(minX, midY);
+				ctx.lineTo(minX + arrowLen, midY + arrowLen * 0.6);
+				ctx.stroke();
+			}
+			ctx.restore();
+		}
+	}
+
+	private _drawDatePriceRange(
+		ctx: CanvasRenderingContext2D,
+		chart: IChartApi,
+		series: ISeriesApi<'Candlestick'>,
+		drawing: Drawing
+	): void {
+		const ts = chart.timeScale();
+		const startX = ts.timeToCoordinate(drawing.startTime as any);
+		const startY = series.priceToCoordinate(drawing.startPrice!);
+		const endX = ts.timeToCoordinate(drawing.endTime as any);
+		const endY = series.priceToCoordinate(drawing.endPrice!);
+		if (startX == null || startY == null || endX == null || endY == null) return;
+		const minX = Math.min(Number(startX), Number(endX));
+		const maxX = Math.max(Number(startX), Number(endX));
+		const minY = Math.min(startY, endY);
+		const maxY = Math.max(startY, endY);
+		const isHidden = !!drawing.hidden;
+		const lineColor = isHidden ? 'rgba(59, 130, 246, 0.6)' : '#3b82f6';
+		const arrowWidth = 2;
+		const arrowLen = 7;
+
+		ctx.save();
+		// Use 0.14 to match overlay in-progress opacity so completed range doesn't look darker when it moves behind candles
+		ctx.fillStyle = isHidden ? 'rgba(59, 130, 246, 0.12)' : 'rgba(59, 130, 246, 0.14)';
+		ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+		ctx.restore();
+
+		// Vertical arrow (price) at center X
+		const bandHeight = maxY - minY;
+		const minHeightForArrow = 24;
+		if (bandHeight >= minHeightForArrow) {
+			const midX = (minX + maxX) / 2;
+			ctx.save();
+			ctx.strokeStyle = lineColor;
+			ctx.lineWidth = arrowWidth;
+			ctx.lineCap = 'round';
+			ctx.beginPath();
+			ctx.moveTo(midX, maxY);
+			ctx.lineTo(midX, minY);
+			ctx.stroke();
+			ctx.restore();
+			const endIsAbove = endY < startY;
+			ctx.save();
+			ctx.strokeStyle = lineColor;
+			ctx.lineWidth = arrowWidth;
+			ctx.lineCap = 'round';
+			ctx.lineJoin = 'round';
+			if (endIsAbove) {
+				ctx.beginPath();
+				ctx.moveTo(midX, minY);
+				ctx.lineTo(midX - arrowLen * 0.6, minY + arrowLen);
+				ctx.moveTo(midX, minY);
+				ctx.lineTo(midX + arrowLen * 0.6, minY + arrowLen);
+				ctx.stroke();
+			} else {
+				ctx.beginPath();
+				ctx.moveTo(midX, maxY);
+				ctx.lineTo(midX - arrowLen * 0.6, maxY - arrowLen);
+				ctx.moveTo(midX, maxY);
+				ctx.lineTo(midX + arrowLen * 0.6, maxY - arrowLen);
+				ctx.stroke();
+			}
+			ctx.restore();
+		}
+
+		// Horizontal arrow (date) at center Y
+		const bandWidth = maxX - minX;
+		const minWidthForArrow = 24;
+		if (bandWidth >= minWidthForArrow) {
+			const midY = (minY + maxY) / 2;
+			ctx.save();
+			ctx.strokeStyle = lineColor;
+			ctx.lineWidth = arrowWidth;
+			ctx.lineCap = 'round';
+			ctx.beginPath();
+			ctx.moveTo(minX, midY);
+			ctx.lineTo(maxX, midY);
+			ctx.stroke();
+			ctx.restore();
 			const endIsRight = (drawing.endTime as number) > (drawing.startTime as number);
 			ctx.save();
 			ctx.strokeStyle = lineColor;

@@ -134,17 +134,26 @@ const topTools: ToolButton[] = [
 const midTools: ToolButton[] = [
 	{
 		id: 'ruler',
-		label: 'Ruler',
+		label: 'Scale',
 		icon: (
-			<Icon>
-				<path d="M4 16l16-8" />
-				<path d="M7 14l1 2" />
-				<path d="M10 12l1 2" />
-				<path d="M13 10l1 2" />
-				<path d="M16 8l1 2" />
-			</Icon>
+		  <Icon>
+			<g transform="rotate(-35, 12, 12)">
+			  <rect x="2" y="10" width="20" height="5.5" rx="0.5" stroke="currentColor" strokeWidth={1.1} fill="none" />
+			  {/* Major ticks */}
+			  <line x1="2"  y1="10" x2="2"  y2="14" stroke="currentColor" strokeWidth={1.1} />
+			  <line x1="7"  y1="10" x2="7"  y2="13.5" stroke="currentColor" strokeWidth={1.1} />
+			  <line x1="12" y1="10" x2="12" y2="14" stroke="currentColor" strokeWidth={1.1} />
+			  <line x1="17" y1="10" x2="17" y2="13.5" stroke="currentColor" strokeWidth={1.1} />
+			  <line x1="22" y1="10" x2="22" y2="14" stroke="currentColor" strokeWidth={1.1} />
+			  {/* Minor ticks */}
+			  <line x1="4.5"  y1="10" x2="4.5"  y2="12" stroke="currentColor" strokeWidth={1.1} />
+			  <line x1="9.5"  y1="10" x2="9.5"  y2="12" stroke="currentColor" strokeWidth={1.1} />
+			  <line x1="14.5" y1="10" x2="14.5" y2="12" stroke="currentColor" strokeWidth={1.1} />
+			  <line x1="19.5" y1="10" x2="19.5" y2="12" stroke="currentColor" strokeWidth={1.1} />
+			</g>
+		  </Icon>
 		),
-	},
+	  },
 	{
 		id: 'zoom',
 		label: 'Zoom',
@@ -219,7 +228,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const [selectedLinesType, setSelectedLinesType] = useState<'lines' | 'ray' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel'>('lines');
 	const [showProjectionMenu, setShowProjectionMenu] = useState(false);
 	const [hoveredProjectionItemId, setHoveredProjectionItemId] = useState<string | null>(null);
-	const [selectedProjectionType, setSelectedProjectionType] = useState<'long-position' | 'short-position' | 'price-range' | 'date-range'>('long-position');
+	const [selectedProjectionType, setSelectedProjectionType] = useState<'long-position' | 'short-position' | 'price-range' | 'date-range' | 'date-price-range'>('long-position');
 	const [showShapesMenu, setShowShapesMenu] = useState(false);
 	const [hoveredShapesItemId, setHoveredShapesItemId] = useState<string | null>(null);
 	const [selectedShapesType, setSelectedShapesType] = useState<'brush' | 'rectangle' | 'path' | 'circle'>('brush');
@@ -267,6 +276,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		if (activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range') {
 			setActiveToolId('projection');
 		}
+		if (activeTool === 'date-price-range') {
+			setActiveToolId('ruler');
+		}
 		if (activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') {
 			setActiveToolId('shapes');
 		}
@@ -304,6 +316,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const measurerMenuItems: Array<{ id: string; label: string; icon: string }> = [
 		{ id: 'price-range', label: 'Price range', icon: 'price-range' },
 		{ id: 'date-range', label: 'Date range', icon: 'date-range' },
+		{ id: 'date-price-range', label: 'Date and price range', icon: 'date-price-range' },
 	];
 
 	const brushesMenuItems: Array<{ id: string; label: string; icon: string }> = [
@@ -555,8 +568,8 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							<Icon className="h-7 w-7" strokeWidth={1}>
 								<path d="M4 4h16" stroke="currentColor" strokeLinecap="round" />
 								<path d="M4 20h16" stroke="currentColor" strokeLinecap="round" />
-								<path d="M12 4v16" stroke="currentColor" strokeLinecap="round" />
-								<path d="M12 4l-1.2 1.5M12 4l1.2 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+								<path d="M12 5.5v11" stroke="currentColor" strokeLinecap="round" />
+								<path d="M12 5.5l-1.2 1.5M12 5.5l1.2 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
 								<circle cx="18" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 								<circle cx="6" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 							</Icon>
@@ -564,10 +577,23 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							<Icon className="h-7 w-7" strokeWidth={1}>
 								<path d="M4 4v16" stroke="currentColor" strokeLinecap="round" />
 								<path d="M20 4v16" stroke="currentColor" strokeLinecap="round" />
-								<path d="M4 12h16" stroke="currentColor" strokeLinecap="round" />
-								<path d="M20 12l-1.5 1.2M20 12l-1.5 -1.2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+								<path d="M5.5 12h11" stroke="currentColor" strokeLinecap="round" />
+								<path d="M18.5 12l-1.5 1.2M18.5 12l-1.5 -1.2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
 								<circle cx="4" cy="6" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 								<circle cx="20" cy="18" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+							</Icon>
+						) : selectedProjectionType === 'date-price-range' ? (
+							<Icon className="h-7 w-7" strokeWidth={1}>
+								<path d="M4 4h16" stroke="currentColor" strokeLinecap="round" />
+								<path d="M4 20h16" stroke="currentColor" strokeLinecap="round" />
+								<path d="M4 4v16" stroke="currentColor" strokeLinecap="round" />
+								<path d="M20 4v16" stroke="currentColor" strokeLinecap="round" />
+								<path d="M12 5.5v11" stroke="currentColor" strokeLinecap="round" />
+								<path d="M12 5.5l-1.2 1.5M12 5.5l1.2 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+								<path d="M5.5 12h11" stroke="currentColor" strokeLinecap="round" />
+								<path d="M18.5 12l-1.5 1.2M18.5 12l-1.5 -1.2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+								<circle cx="3" cy="3" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+								<circle cx="21" cy="21" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 							</Icon>
 						) : (
 							tool.icon
@@ -589,7 +615,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										key={item.id}
 										type="button"
 										onClick={() => {
-											setSelectedProjectionType(item.id as 'long-position' | 'short-position' | 'price-range' | 'date-range');
+											setSelectedProjectionType(item.id as 'long-position' | 'short-position' | 'price-range' | 'date-range' | 'date-price-range');
 											setActiveTool(item.id as any);
 											setShowProjectionMenu(false);
 										}}
@@ -646,7 +672,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										key={item.id}
 										type="button"
 										onClick={() => {
-											setSelectedProjectionType(item.id as 'long-position' | 'short-position' | 'price-range' | 'date-range');
+											setSelectedProjectionType(item.id as 'long-position' | 'short-position' | 'price-range' | 'date-range' | 'date-price-range');
 											setActiveTool(item.id as any);
 											setShowProjectionMenu(false);
 										}}
@@ -662,8 +688,8 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 													<path d="M4 4h16" stroke="currentColor" strokeLinecap="round" />
 													<path d="M4 20h16" stroke="currentColor" strokeLinecap="round" />
-													<path d="M12 4v16" stroke="currentColor" strokeLinecap="round" />
-													<path d="M12 4l-1.2 1.5M12 4l1.2 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+													<path d="M12 5.5v11" stroke="currentColor" strokeLinecap="round" />
+													<path d="M12 5.5l-1.2 1.5M12 5.5l1.2 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
 													<circle cx="18" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 													<circle cx="6" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 												</Icon>
@@ -672,10 +698,24 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
 													<path d="M4 4v16" stroke="currentColor" strokeLinecap="round" />
 													<path d="M20 4v16" stroke="currentColor" strokeLinecap="round" />
-													<path d="M4 12h16" stroke="currentColor" strokeLinecap="round" />
-													<path d="M20 12l-1.5 1.2M20 12l-1.5 -1.2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+													<path d="M5.5 12h11" stroke="currentColor" strokeLinecap="round" />
+													<path d="M18.5 12l-1.5 1.2M18.5 12l-1.5 -1.2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
 													<circle cx="4" cy="6" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 													<circle cx="20" cy="18" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+												</Icon>
+											)}
+											{item.icon === 'date-price-range' && (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+													<path d="M4 4h16" stroke="currentColor" strokeLinecap="round" />
+													<path d="M4 20h16" stroke="currentColor" strokeLinecap="round" />
+													<path d="M4 4v16" stroke="currentColor" strokeLinecap="round" />
+													<path d="M20 4v16" stroke="currentColor" strokeLinecap="round" />
+													<path d="M12 5.5v11" stroke="currentColor" strokeLinecap="round" />
+													<path d="M12 5.5l-1.2 1.5M12 5.5l1.2 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+													<path d="M5.5 12h11" stroke="currentColor" strokeLinecap="round" />
+													<path d="M18.5 12l-1.5 1.2M18.5 12l-1.5 -1.2" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+													<circle cx="3" cy="3" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+													<circle cx="21" cy="21" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 												</Icon>
 											)}
 											{item.label}
@@ -1181,6 +1221,29 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 						</div>
 					)}
 				</div>
+			);
+		}
+
+		// Ruler (Scale): one-click activates date and price range tool; icon always stays ruler
+		if (tool.id === 'ruler') {
+			const isRulerActive = activeToolId === 'ruler';
+			return (
+				<button
+					key={tool.id}
+					type="button"
+					aria-label={tool.label}
+					title="Date and price range"
+					className={[
+						'h-10 w-10 grid place-items-center rounded-lg transition-colors',
+						isRulerActive ? 'text-blue-600' : 'text-slate-900 hover:bg-slate-100 active:bg-slate-200',
+					].join(' ')}
+					onClick={() => {
+						setActiveToolId('ruler');
+						setActiveTool('date-price-range' as any);
+					}}
+				>
+					{tool.icon}
+				</button>
 			);
 		}
 

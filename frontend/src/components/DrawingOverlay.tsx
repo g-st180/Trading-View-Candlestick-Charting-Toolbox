@@ -20,6 +20,91 @@ function gannBorderColor(side: 'top' | 'right' | 'bottom' | 'left'): string {
 	return `hsl(${hues[side]}, 55%, 38%)`;
 }
 
+/** Smooth points with a moving average to round off candle-to-candle steps */
+function smoothPoints(pts: { x: number; y: number }[], radius: number): { x: number; y: number }[] {
+	if (pts.length <= 2) return pts;
+	const out: { x: number; y: number }[] = [];
+	for (let i = 0; i < pts.length; i++) {
+		let sumX = 0, sumY = 0, count = 0;
+		for (let j = Math.max(0, i - radius); j <= Math.min(pts.length - 1, i + radius); j++) {
+			sumX += pts[j].x;
+			sumY += pts[j].y;
+			count++;
+		}
+		out.push({ x: sumX / count, y: sumY / count });
+	}
+	return out;
+}
+
+/** Segment is "straight horizontal" if dy is small relative to dx */
+function isHorizontal(dx: number, dy: number, slopeMax: number): boolean {
+	const d = Math.abs(dx) + 1e-6;
+	return Math.abs(dy) <= slopeMax * d;
+}
+/** Segment is "straight vertical" if dx is small relative to dy */
+function isVertical(dx: number, dy: number, slopeMax: number): boolean {
+	const d = Math.abs(dy) + 1e-6;
+	return Math.abs(dx) <= slopeMax * d;
+}
+
+/** Draw curve from current position through points (ctx already at points[0]); used for turn arcs */
+function drawCurveThrough(ctx: CanvasRenderingContext2D, points: { x: number; y: number }[], tension: number): void {
+	if (points.length < 2) return;
+	if (points.length === 2) {
+		ctx.lineTo(points[1].x, points[1].y);
+		return;
+	}
+	const n = points.length;
+	for (let i = 1; i < n; i++) {
+		const p0 = points[Math.max(0, i - 2)];
+		const p1 = points[i - 1];
+		const p2 = points[i];
+		const p3 = points[Math.min(n - 1, i + 1)];
+		const cp1x = p1.x + (p2.x - p0.x) * tension;
+		const cp1y = p1.y + (p2.y - p0.y) * tension;
+		const cp2x = p2.x - (p3.x - p1.x) * tension;
+		const cp2y = p2.y - (p3.y - p1.y) * tension;
+		ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+	}
+}
+
+/** Brush: straight horizontal, straight vertical, and curvy only at turns. Turns drawn with round curve. */
+function strokeSmoothCurve(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[]): void {
+	if (pts.length < 2) return;
+	const radius = 4;
+	const smoothed = pts.length > 5 ? smoothPoints(smoothPoints(pts, radius), radius) : pts.length > 3 ? smoothPoints(pts, radius) : pts;
+	if (smoothed.length < 2) return;
+	const slopeMax = 0.5;
+	const n = smoothed.length;
+	ctx.moveTo(smoothed[0].x, smoothed[0].y);
+	if (n === 2) {
+		ctx.lineTo(smoothed[1].x, smoothed[1].y);
+		return;
+	}
+	let i = 1;
+	while (i < n) {
+		const dx = smoothed[i].x - smoothed[i - 1].x;
+		const dy = smoothed[i].y - smoothed[i - 1].y;
+		const straight = isHorizontal(dx, dy, slopeMax) || isVertical(dx, dy, slopeMax);
+		if (straight) {
+			ctx.lineTo(smoothed[i].x, smoothed[i].y);
+			i++;
+			continue;
+		}
+		const turnStart = i - 1;
+		let j = i;
+		while (j < n - 1) {
+			const ndx = smoothed[j + 1].x - smoothed[j].x;
+			const ndy = smoothed[j + 1].y - smoothed[j].y;
+			if (isHorizontal(ndx, ndy, slopeMax) || isVertical(ndx, ndy, slopeMax)) break;
+			j++;
+		}
+		const turnPts = smoothed.slice(turnStart, j + 1);
+		drawCurveThrough(ctx, turnPts, 0.65);
+		i = j + 1;
+	}
+}
+
 export interface DrawingOverlayProps {
 	chart: IChartApi | null;
 	series: ISeriesApi<'Candlestick'> | null;
@@ -38,6 +123,11 @@ export interface DrawingOverlayProps {
 	dateRangeLiveEndTimeRef?: React.RefObject<number | null>;
 	dateRangeLiveEndPriceRef?: React.RefObject<number | null>;
 	dateRangeLiveTick?: number;
+	/** Date and price range (combined): in-progress drawing id for smooth live preview */
+	datePriceRangeInProgressIdRef?: React.RefObject<string | null>;
+	datePriceRangeLiveEndTimeRef?: React.RefObject<number | null>;
+	datePriceRangeLiveEndPriceRef?: React.RefObject<number | null>;
+	datePriceRangeLiveTick?: number;
 	/** Rectangle: in-progress drawing id for live preview (click then drag) */
 	rectangleInProgressIdRef?: React.RefObject<string | null>;
 	rectangleLiveTick?: number;
@@ -61,7 +151,7 @@ export interface DrawingOverlayProps {
 	gannBoxLiveTick?: number;
 }
 
-export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0, rectangleInProgressIdRef, rectangleLiveTick = 0, pathInProgressIdRef, pathLiveEndTimeRef, pathLiveEndPriceRef, pathLiveTick = 0, circleInProgressIdRef, circleLiveEndTimeRef, circleLiveEndPriceRef, circleLiveTick = 0, fibRetracementInProgressIdRef, fibRetracementLiveEndTimeRef, fibRetracementLiveEndPriceRef, fibRetracementLiveTick = 0, gannBoxInProgressIdRef, gannBoxLiveTick = 0 }: DrawingOverlayProps) {
+export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0, datePriceRangeInProgressIdRef, datePriceRangeLiveEndTimeRef, datePriceRangeLiveEndPriceRef, datePriceRangeLiveTick = 0, rectangleInProgressIdRef, rectangleLiveTick = 0, pathInProgressIdRef, pathLiveEndTimeRef, pathLiveEndPriceRef, pathLiveTick = 0, circleInProgressIdRef, circleLiveEndTimeRef, circleLiveEndPriceRef, circleLiveTick = 0, fibRetracementInProgressIdRef, fibRetracementLiveEndTimeRef, fibRetracementLiveEndPriceRef, fibRetracementLiveTick = 0, gannBoxInProgressIdRef, gannBoxLiveTick = 0 }: DrawingOverlayProps) {
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const { drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, updateDrawing } = useDrawing();
 	const drawingsRef = useRef<Drawing[]>([]);
@@ -97,7 +187,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 		// Trigger a repaint whenever drawings or candle data change (for RR outcome dotted line).
 		// priceRangeLiveTick drives smooth price-range live preview.
 		scheduleRedrawRef.current?.();
-	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, rectangleLiveTick, pathLiveTick, circleLiveTick, fibRetracementLiveTick, gannBoxLiveTick]);
+	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, datePriceRangeLiveTick, rectangleLiveTick, pathLiveTick, circleLiveTick, fibRetracementLiveTick, gannBoxLiveTick]);
 
 	useEffect(() => {
 		if (!canvasRef.current || !containerRef.current) return;
@@ -714,12 +804,12 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 
 			// Draw band + borders + arrow on overlay only when not using primitive, or when in progress (live preview)
 			const drawUnderlayOnOverlay = !underlayIsPrimitive || isInProgress;
-			const borderWidth = 2;
-			const arrowWidth = 2.5;
+			const borderWidth = 1.5;
+			const arrowWidth = 2;
 			const arrowLen = 7;
 			// Same perceived look when drawing and when done: use slightly lighter fill when in progress (overlay on top) so it doesn’t look dark
 			// In progress: only overlay draws (underlay skips it); use faded opacity to match final look
-			const fillOpacity = isInProgress ? 0.14 : 0.25;
+			const fillOpacity = isInProgress ? 0.10 : 0.25;
 			const strokeColor = '#3b82f6';
 			if (drawUnderlayOnOverlay) {
 				ctx.fillStyle = `rgba(59, 130, 246, ${fillOpacity})`;
@@ -1014,11 +1104,11 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			ctx.clip();
 
 			const drawUnderlayOnOverlay = !underlayIsPrimitive || isInProgress;
-			const borderWidth = 2;
-			const arrowWidth = 2.5;
+			const borderWidth = 1.5;
+			const arrowWidth = 2;
 			const arrowLen = 7;
-			// In progress: only overlay draws (underlay skips it); use faded opacity to match final look
-			const fillOpacity = isInProgress ? 0.14 : 0.25;
+			// Same as date-price-range: overlay in front looks darker; use 0.10 when in progress so fade matches underlay (0.14) when done
+			const fillOpacity = isInProgress ? 0.10 : 0.25;
 			const strokeColor = '#3b82f6';
 			if (drawUnderlayOnOverlay) {
 				ctx.fillStyle = `rgba(59, 130, 246, ${fillOpacity})`;
@@ -1084,6 +1174,189 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			ctx.textBaseline = 'middle';
 			ctx.fillText(barsText, (minX + maxX) / 2, blockY + 14);
 			ctx.fillText(volText, (minX + maxX) / 2, blockY + 14 + 14);
+
+			const shouldShowHandles = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
+			if (shouldShowHandles) {
+				const r = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = '#000000';
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.arc(Number(startX), startY, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(Number(endX), endY, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+			}
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
+		// DATE AND PRICE RANGE (combined: rect, vertical + horizontal arrows, price label + date label, two handles)
+		// ============================================================================
+		if (drawing.type === 'date-price-range' && drawing.startTime != null && drawing.startPrice != null && chart && series) {
+			const isInProgress = datePriceRangeInProgressIdRef?.current === drawing.id;
+			// When not in progress, we need end to draw; when in progress we use live refs or start as end
+			if (!isInProgress && (drawing.endTime == null || drawing.endPrice == null)) return;
+			ctx.save();
+			const ts = chart.timeScale();
+			const liveEndTime = isInProgress ? datePriceRangeLiveEndTimeRef?.current : null;
+			const liveEndPrice = isInProgress ? datePriceRangeLiveEndPriceRef?.current : null;
+			const endTime = liveEndTime ?? drawing.endTime ?? drawing.startTime;
+			const endPrice = liveEndPrice ?? drawing.endPrice ?? drawing.startPrice;
+			const startX = ts.timeToCoordinate(drawing.startTime as any);
+			const startY = series.priceToCoordinate(drawing.startPrice);
+			const endX = ts.timeToCoordinate(endTime as any);
+			const endY = series.priceToCoordinate(endPrice);
+			if (startX == null || startY == null || endX == null || endY == null) {
+				ctx.restore();
+				return;
+			}
+			const minX = Math.min(Number(startX), Number(endX));
+			const maxX = Math.max(Number(startX), Number(endX));
+			const minY = Math.min(startY, endY);
+			const maxY = Math.max(startY, endY);
+
+			// Price label (like price-range)
+			const points = endPrice - drawing.startPrice;
+			const pct = drawing.startPrice !== 0 ? (points / drawing.startPrice) * 100 : 0;
+			const priceLabelText = points === 0 && pct === 0
+				? '0.0 (0.00%)'
+				: `${points >= 0 ? '+' : ''}${points.toFixed(1)} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%)`;
+
+			// Date label (like date-range): bars + duration Vol
+			const barIntervalSeconds = 60;
+			const timeSpanSec = Math.max(0, (endTime as number) - (drawing.startTime as number));
+			const bars = Math.round(timeSpanSec / barIntervalSeconds);
+			const barsText = `${bars} bars`;
+			const totalMinutes = Math.floor(timeSpanSec / 60);
+			let durationStr: string;
+			if (totalMinutes < 60) {
+				durationStr = totalMinutes <= 0 ? '0m' : `${totalMinutes}m`;
+			} else if (totalMinutes < 24 * 60) {
+				const hours = Math.floor(totalMinutes / 60);
+				const mins = totalMinutes % 60;
+				durationStr = mins === 0 ? `${hours}h` : `${hours}h ${mins}m`;
+			} else {
+				const days = Math.floor(totalMinutes / (24 * 60));
+				const rem = totalMinutes % (24 * 60);
+				const hours = Math.floor(rem / 60);
+				const mins = rem % 60;
+				const parts = [`${days}d`];
+				if (hours > 0) parts.push(`${hours}h`);
+				if (mins > 0) parts.push(`${mins}m`);
+				durationStr = parts.join(' ');
+			}
+			const barsData = candlestickDataRef?.current ?? [];
+			let totalVol = 0;
+			const t0 = Math.min(drawing.startTime as number, endTime as number);
+			const t1 = Math.max(drawing.startTime as number, endTime as number);
+			for (const b of barsData) {
+				const t = b.time as number;
+				if (t >= t0 && t <= t1) totalVol += (b as CandleBar).volume ?? 0;
+			}
+			const volStr = totalVol >= 1000 ? `${(totalVol / 1000).toFixed(0)}k` : String(totalVol);
+			const volText = `${durationStr} Vol ${volStr}`;
+
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+
+			// When primitive is used, overlay must never draw the band for completed date-price-range (underlay draws it). Only draw band when: not using primitive, OR (in progress and drawing not yet complete).
+			const hasEnd = drawing.endTime != null && drawing.endPrice != null;
+			const drawBandOnOverlay = underlayIsPrimitive ? (isInProgress && !hasEnd) : true;
+			const arrowWidth = 2;
+			const arrowLen = 7;
+			const fillOpacity = isInProgress ? 0.14 : 0.25;
+			const strokeColor = '#3b82f6';
+			if (drawBandOnOverlay) {
+				ctx.fillStyle = `rgba(59, 130, 246, ${fillOpacity})`;
+				ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+				// Vertical arrow (price) at center X
+				const bandHeight = maxY - minY;
+				const minHeightForArrow = 24;
+				if (bandHeight >= minHeightForArrow) {
+					const midX = (minX + maxX) / 2;
+					ctx.strokeStyle = strokeColor;
+					ctx.lineWidth = arrowWidth;
+					ctx.beginPath();
+					ctx.moveTo(midX, maxY);
+					ctx.lineTo(midX, minY);
+					ctx.stroke();
+					const endIsAbove = endY < startY;
+					if (endIsAbove) {
+						ctx.beginPath();
+						ctx.moveTo(midX, minY);
+						ctx.lineTo(midX - arrowLen * 0.6, minY + arrowLen);
+						ctx.moveTo(midX, minY);
+						ctx.lineTo(midX + arrowLen * 0.6, minY + arrowLen);
+						ctx.stroke();
+					} else {
+						ctx.beginPath();
+						ctx.moveTo(midX, maxY);
+						ctx.lineTo(midX - arrowLen * 0.6, maxY - arrowLen);
+						ctx.moveTo(midX, maxY);
+						ctx.lineTo(midX + arrowLen * 0.6, maxY - arrowLen);
+						ctx.stroke();
+					}
+				}
+				// Horizontal arrow (date) at center Y
+				const bandWidth = maxX - minX;
+				const minWidthForArrow = 24;
+				if (bandWidth >= minWidthForArrow) {
+					const midY = (minY + maxY) / 2;
+					ctx.strokeStyle = strokeColor;
+					ctx.lineWidth = arrowWidth;
+					ctx.beginPath();
+					ctx.moveTo(minX, midY);
+					ctx.lineTo(maxX, midY);
+					ctx.stroke();
+					const endIsRight = (endTime as number) > (drawing.startTime as number);
+					if (endIsRight) {
+						ctx.beginPath();
+						ctx.moveTo(maxX, midY);
+						ctx.lineTo(maxX - arrowLen, midY - arrowLen * 0.6);
+						ctx.moveTo(maxX, midY);
+						ctx.lineTo(maxX - arrowLen, midY + arrowLen * 0.6);
+						ctx.stroke();
+					} else {
+						ctx.beginPath();
+						ctx.moveTo(minX, midY);
+						ctx.lineTo(minX + arrowLen, midY - arrowLen * 0.6);
+						ctx.moveTo(minX, midY);
+						ctx.lineTo(minX + arrowLen, midY + arrowLen * 0.6);
+						ctx.stroke();
+					}
+				}
+			}
+
+			// Combined label block: line1 = price, line2 = bars, line3 = vol
+			const padding = 6;
+			ctx.font = '12px sans-serif';
+			const line1W = ctx.measureText(priceLabelText).width;
+			const line2W = ctx.measureText(barsText).width;
+			const line3W = ctx.measureText(volText).width;
+			const textW = Math.max(line1W, line2W, line3W);
+			const rectW = textW + padding * 2;
+			const rectH = 14 * 3 + padding * 2;
+			const blockX = (minX + maxX) / 2 - rectW / 2;
+			const blockY = maxY + 8;
+			ctx.fillStyle = '#ffffff';
+			ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+			ctx.lineWidth = 1;
+			ctx.beginPath();
+			drawRoundedRect(ctx, blockX, blockY, rectW, rectH, 4);
+			ctx.fill();
+			ctx.stroke();
+			ctx.fillStyle = '#1e293b';
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			ctx.fillText(priceLabelText, (minX + maxX) / 2, blockY + 14);
+			ctx.fillText(barsText, (minX + maxX) / 2, blockY + 14 + 14);
+			ctx.fillText(volText, (minX + maxX) / 2, blockY + 14 + 14 + 14);
 
 			const shouldShowHandles = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
 			if (shouldShowHandles) {
@@ -1595,10 +1868,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			ctx.lineCap = 'round';
 			ctx.lineJoin = 'round';
 			ctx.beginPath();
-			ctx.moveTo(screenPts[0].x, screenPts[0].y);
-			for (let i = 1; i < screenPts.length; i++) {
-				ctx.lineTo(screenPts[i].x, screenPts[i].y);
-			}
+			strokeSmoothCurve(ctx, screenPts);
 			ctx.stroke();
 
 			// Two reposition bubbles at both ends when selected (visual only, not draggable)
