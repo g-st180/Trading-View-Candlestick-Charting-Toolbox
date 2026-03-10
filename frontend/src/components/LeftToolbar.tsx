@@ -166,17 +166,6 @@ const midTools: ToolButton[] = [
 			</Icon>
 		),
 	},
-	{
-		id: 'magnet',
-		label: 'Magnet',
-		icon: (
-			<Icon>
-				<path d="M7 7v6a5 5 0 0010 0V7" />
-				<path d="M7 7h4" />
-				<path d="M13 7h4" />
-			</Icon>
-		),
-	},
 ];
 
 const bottomTools: ToolButton[] = [
@@ -1264,6 +1253,8 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 					// Activate drawing tool if it's a drawing tool
 					if (tool.id === 'lines' || tool.id === 'horizontal-line' || tool.id === 'fib') {
 						setActiveTool(tool.id as any);
+					} else if (tool.id === 'zoom') {
+						setActiveTool('zoom' as any);
 					} else {
 						setActiveTool(null);
 					}

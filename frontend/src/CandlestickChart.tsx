@@ -126,6 +126,9 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     const gannBoxLiveEndTimeRef = useRef<number | null>(null);
     const gannBoxLiveEndPriceRef = useRef<number | null>(null);
     const [gannBoxLiveTick, setGannBoxLiveTick] = useState(0);
+    const zoomStartRef = useRef<{ x: number; y: number } | null>(null);
+    const zoomEndRef = useRef<{ x: number; y: number } | null>(null);
+    const [zoomLiveTick, setZoomLiveTick] = useState(0);
 
     // Sync horizontal-line drawings to lightweight-charts price markers (right price scale)
     useEffect(() => {
@@ -863,8 +866,23 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const handlePointerDown = (e: PointerEvent) => {
             const tool = activeToolRef.current;
-            if (tool !== 'lines' && tool !== 'ray' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position' && tool !== 'short-position' && tool !== 'price-range' && tool !== 'date-range' && tool !== 'date-price-range' && tool !== 'fibonacci-retracement' && tool !== 'gann-box' && tool !== 'brush' && tool !== 'rectangle' && tool !== 'path' && tool !== 'circle' && tool !== 'emoji') return;
+            if (tool !== 'lines' && tool !== 'ray' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position' && tool !== 'short-position' && tool !== 'price-range' && tool !== 'date-range' && tool !== 'date-price-range' && tool !== 'fibonacci-retracement' && tool !== 'gann-box' && tool !== 'brush' && tool !== 'rectangle' && tool !== 'path' && tool !== 'circle' && tool !== 'emoji' && tool !== 'zoom') return;
             const { x, y } = getLocalXY(e);
+
+            if (tool === 'zoom') {
+                const chart = chartRef.current;
+                const series = seriesRef.current;
+                if (!chart || !series) return;
+                e.preventDefault();
+                e.stopPropagation();
+                zoomStartRef.current = { x, y };
+                zoomEndRef.current = { x, y };
+                setZoomLiveTick((t) => t + 1);
+                try {
+                    container.setPointerCapture(e.pointerId);
+                } catch (_) {}
+                return;
+            }
 
             const drawingId = `drawing-${Date.now()}`;
 
@@ -1553,6 +1571,12 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         };
 
         const handlePointerMove = (e: PointerEvent) => {
+            if (zoomStartRef.current != null) {
+                const { x, y } = getLocalXY(e);
+                zoomEndRef.current = { x, y };
+                setZoomLiveTick((t) => t + 1);
+                return;
+            }
             const tool = activeToolRef.current;
             if (currentDrawingRef?.type === 'brush') {
                 e.preventDefault();
@@ -1808,6 +1832,45 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         };
 
         const handlePointerUp = (e: PointerEvent) => {
+            if (zoomStartRef.current != null && zoomEndRef.current != null) {
+                const chart = chartRef.current;
+                const series = seriesRef.current;
+                const start = zoomStartRef.current;
+                const end = zoomEndRef.current;
+                zoomStartRef.current = null;
+                zoomEndRef.current = null;
+                setZoomLiveTick(0);
+                try {
+                    container.releasePointerCapture(e.pointerId);
+                } catch (_) {}
+                if (chart && series) {
+                    const minX = Math.min(start.x, end.x);
+                    const maxX = Math.max(start.x, end.x);
+                    const minY = Math.min(start.y, end.y);
+                    const maxY = Math.max(start.y, end.y);
+                    const dx = maxX - minX;
+                    const dy = maxY - minY;
+                    if (dx < 4 || dy < 4) return;
+                    const timeFrom = getTimeFromX(chart, minX);
+                    const timeTo = getTimeFromX(chart, maxX);
+                    const priceHigh = series.coordinateToPrice(minY);
+                    const priceLow = series.coordinateToPrice(maxY);
+                    if (timeFrom != null && timeTo != null && timeFrom !== timeTo) {
+                        try {
+                            (chart.timeScale() as any).setVisibleRange?.({ from: timeFrom, to: timeTo });
+                        } catch (_) {}
+                    }
+                    if (priceHigh != null && priceLow != null && priceHigh !== priceLow) {
+                        try {
+                            const ps = chart.priceScale('right') as any;
+                            if (ps && typeof ps.setVisibleRange === 'function') {
+                                ps.setVisibleRange({ from: Math.min(priceHigh, priceLow), to: Math.max(priceHigh, priceLow) });
+                            }
+                        } catch (_) {}
+                    }
+                }
+                return;
+            }
             if (currentDrawingRef?.type === 'brush') {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1843,6 +1906,8 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             isPlacingLine = false;
             currentDrawingRef = null;
             priceRangeInProgressRef.current = null;
+            zoomStartRef.current = null;
+            zoomEndRef.current = null;
         };
     }, [activeTool]);
 
@@ -5218,6 +5283,9 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 fibRetracementLiveTick={fibRetracementLiveTick}
                 gannBoxInProgressIdRef={gannBoxInProgressRef}
                 gannBoxLiveTick={gannBoxLiveTick}
+                zoomRectStartRef={zoomStartRef}
+                zoomRectEndRef={zoomEndRef}
+                zoomLiveTick={zoomLiveTick}
             />
         </div>
     );

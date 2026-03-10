@@ -149,9 +149,13 @@ export interface DrawingOverlayProps {
 	/** Gann box: in-progress drawing id for live preview */
 	gannBoxInProgressIdRef?: React.RefObject<string | null>;
 	gannBoxLiveTick?: number;
+	/** Zoom tool: drag rect (start/end in container pixels) for live preview */
+	zoomRectStartRef?: React.RefObject<{ x: number; y: number } | null>;
+	zoomRectEndRef?: React.RefObject<{ x: number; y: number } | null>;
+	zoomLiveTick?: number;
 }
 
-export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0, datePriceRangeInProgressIdRef, datePriceRangeLiveEndTimeRef, datePriceRangeLiveEndPriceRef, datePriceRangeLiveTick = 0, rectangleInProgressIdRef, rectangleLiveTick = 0, pathInProgressIdRef, pathLiveEndTimeRef, pathLiveEndPriceRef, pathLiveTick = 0, circleInProgressIdRef, circleLiveEndTimeRef, circleLiveEndPriceRef, circleLiveTick = 0, fibRetracementInProgressIdRef, fibRetracementLiveEndTimeRef, fibRetracementLiveEndPriceRef, fibRetracementLiveTick = 0, gannBoxInProgressIdRef, gannBoxLiveTick = 0 }: DrawingOverlayProps) {
+export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0, datePriceRangeInProgressIdRef, datePriceRangeLiveEndTimeRef, datePriceRangeLiveEndPriceRef, datePriceRangeLiveTick = 0, rectangleInProgressIdRef, rectangleLiveTick = 0, pathInProgressIdRef, pathLiveEndTimeRef, pathLiveEndPriceRef, pathLiveTick = 0, circleInProgressIdRef, circleLiveEndTimeRef, circleLiveEndPriceRef, circleLiveTick = 0, fibRetracementInProgressIdRef, fibRetracementLiveEndTimeRef, fibRetracementLiveEndPriceRef, fibRetracementLiveTick = 0, gannBoxInProgressIdRef, gannBoxLiveTick = 0, zoomRectStartRef, zoomRectEndRef, zoomLiveTick = 0 }: DrawingOverlayProps) {
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const { drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, updateDrawing } = useDrawing();
 	const drawingsRef = useRef<Drawing[]>([]);
@@ -187,7 +191,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 		// Trigger a repaint whenever drawings or candle data change (for RR outcome dotted line).
 		// priceRangeLiveTick drives smooth price-range live preview.
 		scheduleRedrawRef.current?.();
-	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, datePriceRangeLiveTick, rectangleLiveTick, pathLiveTick, circleLiveTick, fibRetracementLiveTick, gannBoxLiveTick]);
+	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, datePriceRangeLiveTick, rectangleLiveTick, pathLiveTick, circleLiveTick, fibRetracementLiveTick, gannBoxLiveTick, zoomLiveTick]);
 
 	useEffect(() => {
 		if (!canvasRef.current || !containerRef.current) return;
@@ -250,6 +254,23 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				if (!currentDrawingRef.current.hidden) {
 					drawDrawing(ctx, currentDrawingRef.current, container, chartToScreen, 'overlay');
 				}
+			}
+
+			// Zoom tool: draw selection rectangle while dragging
+			const zStart = zoomRectStartRef?.current;
+			const zEnd = zoomRectEndRef?.current;
+			if (zStart && zEnd) {
+				const minX = Math.min(zStart.x, zEnd.x);
+				const maxX = Math.max(zStart.x, zEnd.x);
+				const minY = Math.min(zStart.y, zEnd.y);
+				const maxY = Math.max(zStart.y, zEnd.y);
+				ctx.save();
+				ctx.fillStyle = 'rgba(59, 130, 246, 0.12)';
+				ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+				ctx.strokeStyle = 'rgba(59, 130, 246, 0.6)';
+				ctx.lineWidth = 1.5;
+				ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
+				ctx.restore();
 			}
 		};
 
