@@ -1930,7 +1930,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			// If it's a "line" tool for now: just draw segment start->end
 			const start = pts[0];
 			// Lines/Ray tool: show first bubble immediately on click (even before drag)
-			if ((drawing.type === 'lines' || drawing.type === 'ray') && pts.length === 1) {
+			if ((drawing.type === 'lines' || drawing.type === 'ray' || drawing.type === 'arrow-marker' || drawing.type === 'arrow') && pts.length === 1) {
 				const r = 5;
 				ctx.save();
 				ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 2) * 0.6);
@@ -2124,7 +2124,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 		}
 
 		// Chart-space Lines/Ray tool: show first bubble immediately (before second click)
-		if ((drawing.type === 'lines' || drawing.type === 'ray') && drawing.points && drawing.points.length === 1) {
+		if ((drawing.type === 'lines' || drawing.type === 'ray' || drawing.type === 'arrow-marker' || drawing.type === 'arrow') && drawing.points && drawing.points.length === 1) {
 			const p = chartToScreen(drawing.points[0]);
 			if (!p) return;
 			ctx.save();
@@ -2192,6 +2192,122 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			}
 
 			ctx.restore();
+			return;
+		}
+
+		// Arrow Mark Up: single-point, handle before the 2-point guard
+		if (drawing.type === 'arrow-markup' && drawing.points && drawing.points.length >= 1) {
+			const scrPt = chartToScreen(drawing.points[0]);
+			if (scrPt) {
+				const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
+				const isHovered = hoveredLineIdRef.current === drawing.id;
+				const isSelected = selectedLineIdRef.current === drawing.id;
+				const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
+
+				const plotW = plotWidth || container.getBoundingClientRect().width;
+				ctx.save();
+				ctx.beginPath();
+				ctx.rect(0, 0, plotW, container.getBoundingClientRect().height);
+				ctx.clip();
+
+				const color = drawing.style?.color || '#22c55e';
+				const arrowH = 28;
+				const arrowW = 18;
+				const headH = 16;
+				const shaftW = 7;
+
+				const tipX = scrPt.x;
+				const tipY = scrPt.y - arrowH;
+				const headLeftX = scrPt.x - arrowW / 2;
+				const headRightX = scrPt.x + arrowW / 2;
+				const headBaseY = scrPt.y - arrowH + headH;
+				const shaftLeftX = scrPt.x - shaftW / 2;
+				const shaftRightX = scrPt.x + shaftW / 2;
+				const bottomY = scrPt.y;
+
+				ctx.beginPath();
+				ctx.moveTo(tipX, tipY);
+				ctx.lineTo(headRightX, headBaseY);
+				ctx.lineTo(shaftRightX, headBaseY);
+				ctx.lineTo(shaftRightX, bottomY);
+				ctx.lineTo(shaftLeftX, bottomY);
+				ctx.lineTo(shaftLeftX, headBaseY);
+				ctx.lineTo(headLeftX, headBaseY);
+				ctx.closePath();
+				ctx.fillStyle = color;
+				ctx.fill();
+
+				if (shouldShowBubbles) {
+					const r = 5;
+					ctx.fillStyle = '#ffffff';
+					ctx.strokeStyle = color;
+					ctx.lineWidth = 1.5;
+					ctx.beginPath();
+					ctx.arc(tipX, tipY, r, 0, Math.PI * 2);
+					ctx.fill();
+					ctx.stroke();
+				}
+
+				ctx.restore();
+			}
+			return;
+		}
+
+		// Arrow Mark Down: single-point, downward red arrow
+		if (drawing.type === 'arrow-markdown' && drawing.points && drawing.points.length >= 1) {
+			const scrPt = chartToScreen(drawing.points[0]);
+			if (scrPt) {
+				const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
+				const isHovered = hoveredLineIdRef.current === drawing.id;
+				const isSelected = selectedLineIdRef.current === drawing.id;
+				const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
+
+				const plotW = plotWidth || container.getBoundingClientRect().width;
+				ctx.save();
+				ctx.beginPath();
+				ctx.rect(0, 0, plotW, container.getBoundingClientRect().height);
+				ctx.clip();
+
+				const color = drawing.style?.color || '#ef4444';
+				const arrowH = 28;
+				const arrowW = 18;
+				const headH = 16;
+				const shaftW = 7;
+
+				const tipX = scrPt.x;
+				const tipY = scrPt.y + arrowH;
+				const headLeftX = scrPt.x - arrowW / 2;
+				const headRightX = scrPt.x + arrowW / 2;
+				const headBaseY = scrPt.y + arrowH - headH;
+				const shaftLeftX = scrPt.x - shaftW / 2;
+				const shaftRightX = scrPt.x + shaftW / 2;
+				const topY = scrPt.y;
+
+				ctx.beginPath();
+				ctx.moveTo(tipX, tipY);
+				ctx.lineTo(headRightX, headBaseY);
+				ctx.lineTo(shaftRightX, headBaseY);
+				ctx.lineTo(shaftRightX, topY);
+				ctx.lineTo(shaftLeftX, topY);
+				ctx.lineTo(shaftLeftX, headBaseY);
+				ctx.lineTo(headLeftX, headBaseY);
+				ctx.closePath();
+				ctx.fillStyle = color;
+				ctx.fill();
+
+				if (shouldShowBubbles) {
+					const r = 5;
+					ctx.fillStyle = '#ffffff';
+					ctx.strokeStyle = color;
+					ctx.lineWidth = 1.5;
+					ctx.beginPath();
+					ctx.arc(tipX, tipY, r, 0, Math.PI * 2);
+					ctx.fill();
+					ctx.stroke();
+				}
+
+				ctx.restore();
+			}
 			return;
 		}
 
@@ -2374,6 +2490,211 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				ctx.restore();
 
 				// Draw end bubble
+				ctx.save();
+				if (isEndHovered) {
+					ctx.shadowColor = 'rgba(59, 130, 246, 0.9)';
+					ctx.shadowBlur = 8;
+				}
+				ctx.beginPath();
+				ctx.arc(end.x, end.y, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.restore();
+			}
+
+			ctx.restore();
+			ctx.restore();
+			return;
+		}
+
+	// Simple arrow: line from start to end + ">" chevron at tip; always draw on overlay (not in underlay primitive)
+	if (drawing.type === 'arrow' && screenPoints.length >= 2) {
+			const start = screenPoints[0];
+			const end = screenPoints[screenPoints.length - 1];
+
+			const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
+			const isHovered = hoveredLineIdRef.current === drawing.id;
+			const isSelected = selectedLineIdRef.current === drawing.id;
+			const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
+			const drawOnOverlay = drawing.type === 'arrow' || drawing.type === 'arrow-marker' ? true : (!underlayIsPrimitive || isCurrentDrawing);
+
+			const plotW = plotWidth || container.getBoundingClientRect().width;
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotW, container.getBoundingClientRect().height);
+			ctx.clip();
+
+			const color = drawing.style?.color || '#3b82f6';
+			const lineW = drawing.style?.width ?? 2;
+			const dx = end.x - start.x;
+			const dy = end.y - start.y;
+			const len = Math.sqrt(dx * dx + dy * dy) || 1;
+			const ux = dx / len;
+			const uy = dy / len;
+			const perpX = -uy;
+			const perpY = ux;
+			const arrowheadLen = 13;
+			const arrowheadHalfW = 8;
+
+			if (drawOnOverlay) {
+				ctx.strokeStyle = color;
+				ctx.lineWidth = lineW;
+				ctx.lineCap = 'round';
+				ctx.lineJoin = 'round';
+				ctx.beginPath();
+				ctx.moveTo(start.x, start.y);
+				ctx.lineTo(end.x, end.y);
+				ctx.stroke();
+
+				// ">" chevron at tip: two lines meeting at the point (like >)
+				const baseX = end.x - ux * arrowheadLen;
+				const baseY = end.y - uy * arrowheadLen;
+				const leftX = baseX + perpX * arrowheadHalfW;
+				const leftY = baseY + perpY * arrowheadHalfW;
+				const rightX = baseX - perpX * arrowheadHalfW;
+				const rightY = baseY - perpY * arrowheadHalfW;
+				ctx.beginPath();
+				ctx.moveTo(end.x, end.y);
+				ctx.lineTo(leftX, leftY);
+				ctx.moveTo(end.x, end.y);
+				ctx.lineTo(rightX, rightY);
+				ctx.strokeStyle = color;
+				ctx.lineWidth = lineW;
+				ctx.stroke();
+			}
+
+			if (shouldShowBubbles) {
+				const r = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = color;
+				ctx.lineWidth = 1.5;
+				const hoveredHandle = hoveredLineHandleIdRef.current;
+				const isStartHovered = hoveredHandle === `${drawing.id}:start`;
+				const isEndHovered = hoveredHandle === `${drawing.id}:end`;
+				ctx.save();
+				if (isStartHovered) { ctx.shadowColor = 'rgba(59, 130, 246, 0.9)'; ctx.shadowBlur = 8; }
+				ctx.beginPath();
+				ctx.arc(start.x, start.y, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.restore();
+				ctx.save();
+				if (isEndHovered) { ctx.shadowColor = 'rgba(59, 130, 246, 0.9)'; ctx.shadowBlur = 8; }
+				ctx.beginPath();
+				ctx.arc(end.x, end.y, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.restore();
+			}
+
+			ctx.restore();
+			ctx.restore();
+			return;
+		}
+
+		if (drawing.type === 'arrow-marker' && screenPoints.length >= 2) {
+			const start = screenPoints[0];
+			const end = screenPoints[screenPoints.length - 1];
+
+			const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
+			const isHovered = hoveredLineIdRef.current === drawing.id;
+			const isSelected = selectedLineIdRef.current === drawing.id;
+			const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
+			// Arrow-marker is not drawn by underlay primitive, so always draw on overlay
+			const drawOnOverlay = drawing.type === 'arrow-marker' ? true : (!underlayIsPrimitive || isCurrentDrawing);
+
+			const plotW = plotWidth || container.getBoundingClientRect().width;
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotW, container.getBoundingClientRect().height);
+			ctx.clip();
+
+			const color = drawing.style?.color || '#3b82f6';
+			const dx = end.x - start.x;
+			const dy = end.y - start.y;
+			const len = Math.sqrt(dx * dx + dy * dy) || 1;
+			const ux = dx / len;
+			const uy = dy / len;
+			const perpX = -uy;
+			const perpY = ux;
+
+			// Scale whole figure with distance: reference length ~40px, scale proportionally (min so it's visible when short)
+			const refLen = 40;
+			const scale = Math.max(0.5, Math.min(2.5, len / refLen));
+			const shaftWidth = 4 * scale;           // base for shaft thickness
+
+			if (drawOnOverlay) {
+				// One continuous arrow: narrow at start, broad body, point at end (single figure, proper arrowhead)
+				const halfWidthStart = shaftWidth * 0.25;
+				const halfWidthEnd = shaftWidth * 2.5;
+				const arrowheadLen = 12 * scale;  // how far back the "shoulders" of the arrowhead are from the tip
+				const baseDist = len - arrowheadLen;  // distance from start to arrowhead base (broad end)
+
+				const s1x = start.x + perpX * halfWidthStart;
+				const s1y = start.y + perpY * halfWidthStart;
+				const s2x = start.x - perpX * halfWidthStart;
+				const s2y = start.y - perpY * halfWidthStart;
+				const e1x = start.x + ux * baseDist + perpX * halfWidthEnd;
+				const e1y = start.y + uy * baseDist + perpY * halfWidthEnd;
+				const e2x = start.x + ux * baseDist - perpX * halfWidthEnd;
+				const e2y = start.y + uy * baseDist - perpY * halfWidthEnd;
+				const tipX = end.x;
+				const tipY = end.y;
+
+				// Single path: s1 -> e1 -> tip -> e2 -> s2 (one arrow shape with point at end)
+				ctx.beginPath();
+				ctx.moveTo(s1x, s1y);
+				ctx.lineTo(e1x, e1y);
+				ctx.lineTo(tipX, tipY);
+				ctx.lineTo(e2x, e2y);
+				ctx.lineTo(s2x, s2y);
+				ctx.closePath();
+				ctx.fillStyle = color;
+				ctx.fill();
+
+				// Thick ">" arrow pointer at tip (same style as simple arrow, but thicker and large)
+				const pointerLen = 24 * scale;
+				const pointerHalfW = 20 * scale;
+				const basePX = end.x - ux * pointerLen;
+				const basePY = end.y - uy * pointerLen;
+				const plX = basePX + perpX * pointerHalfW;
+				const plY = basePY + perpY * pointerHalfW;
+				const prX = basePX - perpX * pointerHalfW;
+				const prY = basePY - perpY * pointerHalfW;
+				ctx.beginPath();
+				ctx.moveTo(end.x, end.y);
+				ctx.lineTo(plX, plY);
+				ctx.moveTo(end.x, end.y);
+				ctx.lineTo(prX, prY);
+				ctx.strokeStyle = color;
+				ctx.lineWidth = Math.max(4, shaftWidth * 1.2);
+				ctx.lineCap = 'round';
+				ctx.lineJoin = 'round';
+				ctx.stroke();
+			}
+
+			// Reposition bubbles on top
+			if (shouldShowBubbles) {
+				const r = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = color;
+				ctx.lineWidth = 1.5;
+
+				const hoveredHandle = hoveredLineHandleIdRef.current;
+				const isStartHovered = hoveredHandle === `${drawing.id}:start`;
+				const isEndHovered = hoveredHandle === `${drawing.id}:end`;
+
+				ctx.save();
+				if (isStartHovered) {
+					ctx.shadowColor = 'rgba(59, 130, 246, 0.9)';
+					ctx.shadowBlur = 8;
+				}
+				ctx.beginPath();
+				ctx.arc(start.x, start.y, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.restore();
+
 				ctx.save();
 				if (isEndHovered) {
 					ctx.shadowColor = 'rgba(59, 130, 246, 0.9)';

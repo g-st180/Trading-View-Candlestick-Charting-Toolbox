@@ -220,7 +220,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const [selectedProjectionType, setSelectedProjectionType] = useState<'long-position' | 'short-position' | 'price-range' | 'date-range' | 'date-price-range'>('long-position');
 	const [showShapesMenu, setShowShapesMenu] = useState(false);
 	const [hoveredShapesItemId, setHoveredShapesItemId] = useState<string | null>(null);
-	const [selectedShapesType, setSelectedShapesType] = useState<'brush' | 'rectangle' | 'path' | 'circle'>('brush');
+	const [selectedShapesType, setSelectedShapesType] = useState<'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle'>('brush');
 	const [showFibonacciMenu, setShowFibonacciMenu] = useState(false);
 	const [hoveredFibonacciItemId, setHoveredFibonacciItemId] = useState<string | null>(null);
 	const [selectedFibonacciType, setSelectedFibonacciType] = useState<'fibonacci-retracement' | 'gann-box'>('fibonacci-retracement');
@@ -268,8 +268,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		if (activeTool === 'date-price-range') {
 			setActiveToolId('ruler');
 		}
-		if (activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') {
+		if (activeTool === 'brush' || activeTool === 'arrow' || activeTool === 'arrow-marker' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') {
 			setActiveToolId('shapes');
+			if (activeTool === 'arrow-marker' || activeTool === 'arrow') setSelectedShapesType(activeTool);
 		}
 		if (activeTool === 'fibonacci-retracement' || activeTool === 'gann-box') {
 			setActiveToolId('fibonacci');
@@ -310,6 +311,12 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 
 	const brushesMenuItems: Array<{ id: string; label: string; icon: string }> = [
 		{ id: 'brush', label: 'Brush tool', icon: 'brush' },
+	];
+	const arrowsMenuItems: Array<{ id: string; label: string; icon: string }> = [
+		{ id: 'arrow', label: 'Arrow', icon: 'arrow' },
+		{ id: 'arrow-marker', label: 'Arrow marker', icon: 'arrow-marker' },
+		{ id: 'arrow-markup', label: 'Arrow Mark Up', icon: 'arrow-markup' },
+		{ id: 'arrow-markdown', label: 'Arrow Mark Down', icon: 'arrow-markdown' },
 	];
 	const shapesSubMenuItems: Array<{ id: string; label: string; icon: string }> = [
 		{ id: 'rectangle', label: 'Rectangle', icon: 'rectangle' },
@@ -847,6 +854,27 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 								<path d="M16.5 3.5a2.121 2.121 0 013 3L8 18l-4 1 1-4 11.5-11.5z" />
 								<line x1="14.5" y1="5.5" x2="18.5" y2="9.5" />
 							</Icon>
+						) : selectedShapesType === 'arrow' ? (
+							<Icon className="h-7 w-7" strokeWidth={1}>
+								<path d="M4 20 L20 4" stroke="currentColor" fill="none" strokeLinecap="round" />
+								<path d="M20 4 L15 7 M20 4 L17 9" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+								<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" />
+							</Icon>
+						) : selectedShapesType === 'arrow-marker' ? (
+							<Icon className="h-7 w-7" strokeWidth={0}>
+								<path
+									d="M20 3 L13 7 L15 9 L5 19 L1 23 L10 17 L17 10 L19 12 Z"
+									fill="currentColor"
+								/>
+							</Icon>
+						) : selectedShapesType === 'arrow-markup' ? (
+							<Icon className="h-7 w-7" strokeWidth={0}>
+								<path d="M12 4 L7 14 L10 14 L10 20 L14 20 L14 14 L17 14 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
+							</Icon>
+						) : selectedShapesType === 'arrow-markdown' ? (
+							<Icon className="h-7 w-7" strokeWidth={0}>
+								<path d="M12 20 L7 10 L10 10 L10 4 L14 4 L14 10 L17 10 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
+							</Icon>
 						) : selectedShapesType === 'rectangle' ? (
 							<Icon className="h-7 w-7" strokeWidth={1}>
 								<rect x="4" y="4" width="16" height="16" rx="1" fill="none" stroke="currentColor" />
@@ -879,8 +907,16 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
 								Shapes
 							</div>
-							<div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider pt-2">
-								Brushes
+							<div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider pt-2 flex items-center justify-between">
+								<span>Brushes</span>
+								<span className="flex items-center gap-0.5">
+									<svg className="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+										<path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+									</svg>
+									<svg className="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+										<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+									</svg>
+								</span>
 							</div>
 							{brushesMenuItems.map((item) => {
 								const isSelected = selectedShapesType === item.id;
@@ -890,7 +926,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										key={item.id}
 										type="button"
 										onClick={() => {
-											setSelectedShapesType(item.id as 'brush' | 'rectangle' | 'path' | 'circle');
+											setSelectedShapesType(item.id as 'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle');
 											setActiveTool(item.id as any);
 											setShowShapesMenu(false);
 										}}
@@ -919,6 +955,61 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 								);
 							})}
 							<div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider pt-2">
+								Arrows
+							</div>
+							{arrowsMenuItems.map((item) => {
+								const isSelected = selectedShapesType === item.id;
+								const isHovered = hoveredShapesItemId === item.id;
+								return (
+									<button
+										key={item.id}
+										type="button"
+										onClick={() => {
+											setSelectedShapesType(item.id as 'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle');
+											setActiveTool(item.id as any);
+											setShowShapesMenu(false);
+										}}
+										onMouseEnter={() => setHoveredShapesItemId(item.id)}
+										onMouseLeave={() => setHoveredShapesItemId(null)}
+										className={[
+											'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
+											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
+										].join(' ')}
+									>
+										<span className="flex items-center gap-2 whitespace-nowrap">
+											{item.icon === 'arrow' && (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+													<path d="M4 20 L20 4" stroke="currentColor" fill="none" strokeLinecap="round" />
+													<path d="M20 4 L15 7 M20 4 L17 9" stroke="currentColor" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+													<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" />
+												</Icon>
+											)}
+											{item.icon === 'arrow-marker' && (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={0}>
+													<path d="M20 3 L13 7 L15 9 L5 19 L1 23 L10 17 L17 10 L19 12 Z" fill="currentColor" />
+												</Icon>
+											)}
+											{item.icon === 'arrow-markup' && (
+												<Icon className="h-7 w-7" strokeWidth={0}>
+													<path d="M12 4 L7 14 L10 14 L10 20 L14 20 L14 14 L17 14 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
+												</Icon>
+											)}
+											{item.icon === 'arrow-markdown' && (
+												<Icon className="h-7 w-7" strokeWidth={0}>
+													<path d="M12 20 L7 10 L10 10 L10 4 L14 4 L14 10 L17 10 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
+												</Icon>
+											)}
+											{item.label}
+										</span>
+										{(isSelected || isHovered) && (
+											<svg className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.2}>
+												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+											</svg>
+										)}
+									</button>
+								);
+							})}
+							<div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider pt-2">
 								Shapes
 							</div>
 							{shapesSubMenuItems.map((item) => {
@@ -929,7 +1020,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										key={item.id}
 										type="button"
 										onClick={() => {
-											setSelectedShapesType(item.id as 'brush' | 'rectangle' | 'path' | 'circle');
+											setSelectedShapesType(item.id as 'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle');
 											setActiveTool(item.id as any);
 											setShowShapesMenu(false);
 										}}
