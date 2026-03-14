@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useRef, ReactNode } from 'react';
 
-export type DrawingTool = 'lines' | 'ray' | 'trendline' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel' | 'long-position' | 'short-position' | 'price-range' | 'date-range' | 'date-price-range' | 'fib' | 'fibonacci-retracement' | 'gann-box' | 'brush' | 'rectangle' | 'path' | 'circle' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'text' | 'emoji' | 'zoom' | null;
+export type DrawingTool = 'lines' | 'ray' | 'trendline' | 'info-line' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel' | 'long-position' | 'short-position' | 'price-range' | 'date-range' | 'date-price-range' | 'fib' | 'fibonacci-retracement' | 'gann-box' | 'brush' | 'rectangle' | 'path' | 'circle' | 'curve' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'text' | 'emoji' | 'zoom' | null;
 
 // Chart coordinates (time, price) - these stay constant regardless of zoom/pan
 export interface ChartPoint {
@@ -40,6 +40,8 @@ export interface Drawing {
 	endPrice?: number;
 	// For emoji: character to display; box from (startTime, startPrice) to (endTime, endPrice)
 	emojiChar?: string;
+	// For info-line: optional text label shown center-aligned on the line
+	label?: string;
 }
 
 interface DrawingContextType {

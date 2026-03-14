@@ -118,6 +118,8 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     const circleLiveEndTimeRef = useRef<number | null>(null);
     const circleLiveEndPriceRef = useRef<number | null>(null);
     const [circleLiveTick, setCircleLiveTick] = useState(0);
+    const curveInProgressRef = useRef<string | null>(null);
+    const [curveLiveTick, setCurveLiveTick] = useState(0);
     const fibRetracementInProgressRef = useRef<string | null>(null);
     const fibRetracementLiveEndTimeRef = useRef<number | null>(null);
     const fibRetracementLiveEndPriceRef = useRef<number | null>(null);
@@ -866,7 +868,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const handlePointerDown = (e: PointerEvent) => {
             const tool = activeToolRef.current;
-            if (tool !== 'lines' && tool !== 'ray' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position' && tool !== 'short-position' && tool !== 'price-range' && tool !== 'date-range' && tool !== 'date-price-range' && tool !== 'fibonacci-retracement' && tool !== 'gann-box' && tool !== 'brush' && tool !== 'rectangle' && tool !== 'path' && tool !== 'circle' && tool !== 'emoji' && tool !== 'zoom' && tool !== 'arrow-marker' && tool !== 'arrow' && tool !== 'arrow-markup' && tool !== 'arrow-markdown') return;
+            if (tool !== 'lines' && tool !== 'ray' && tool !== 'info-line' && tool !== 'horizontal-line' && tool !== 'horizontal-ray' && tool !== 'parallel-channel' && tool !== 'long-position' && tool !== 'short-position' && tool !== 'price-range' && tool !== 'date-range' && tool !== 'date-price-range' && tool !== 'fibonacci-retracement' && tool !== 'gann-box' && tool !== 'brush' && tool !== 'rectangle' && tool !== 'path' && tool !== 'circle' && tool !== 'curve' && tool !== 'emoji' && tool !== 'zoom' && tool !== 'arrow-marker' && tool !== 'arrow' && tool !== 'arrow-markup' && tool !== 'arrow-markdown') return;
             const { x, y } = getLocalXY(e);
 
             if (tool === 'zoom') {
@@ -1073,6 +1075,72 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 };
                 addDrawingRefFn.current(circleDrawing);
                 circleInProgressRef.current = drawingId;
+                return;
+            }
+
+            if (tool === 'curve') {
+                e.preventDefault();
+                e.stopPropagation();
+                const chart = chartRef.current;
+                const series = seriesRef.current;
+                if (!chart || !series) return;
+                const pt = screenToChart(x, y);
+                if (!pt) return;
+
+                if (curveInProgressRef.current) {
+                    const id = curveInProgressRef.current;
+                    const curveDrawing = drawingsRef.current.find((d) => d.id === id);
+                    if (!curveDrawing || curveDrawing.type !== 'curve' || !curveDrawing.points?.length) {
+                        curveInProgressRef.current = null;
+                        return;
+                    }
+                    const start = curveDrawing.points[0];
+                    const end = pt;
+                    const startScreenX = chart.timeScale().timeToCoordinate(start.time as any);
+                    const startScreenY = series.priceToCoordinate(start.price);
+                    const endScreenX = chart.timeScale().timeToCoordinate(end.time as any);
+                    const endScreenY = series.priceToCoordinate(end.price);
+                    let control: { time: number; price: number };
+                    if (startScreenX != null && startScreenY != null && endScreenX != null && endScreenY != null) {
+                        const midX = (Number(startScreenX) + Number(endScreenX)) / 2;
+                        const midY = (startScreenY + endScreenY) / 2;
+                        const dx = Number(endScreenX) - Number(startScreenX);
+                        const dy = endScreenY - startScreenY;
+                        const len = Math.hypot(dx, dy) || 1;
+                        const offset = len * 0.4;
+                        const perpX = (-dy / len) * offset;
+                        const perpY = (dx / len) * offset;
+                        const ctrlScreenX = midX + perpX;
+                        const ctrlScreenY = midY + perpY;
+                        const ctrlTime = getTimeFromX(chart, ctrlScreenX);
+                        const ctrlPrice = series.coordinateToPrice(ctrlScreenY);
+                        if (ctrlTime != null && ctrlPrice != null) {
+                            control = { time: ctrlTime, price: ctrlPrice };
+                        } else {
+                            control = { time: (start.time + end.time) / 2, price: (start.price + end.price) / 2 };
+                        }
+                    } else {
+                        control = { time: (start.time + end.time) / 2, price: (start.price + end.price) / 2 };
+                    }
+                    updateDrawingRefFn.current(id, (prev) => ({
+                        ...prev,
+                        points: [start, control, end],
+                    }));
+                    setCurrentDrawingRefFn.current(null);
+                    curveInProgressRef.current = null;
+                    setActiveToolRefFn.current(null);
+                    return;
+                }
+
+                const curveDrawing: Drawing = {
+                    id: drawingId,
+                    type: 'curve',
+                    points: [pt],
+                    style: { color: '#3b82f6', width: 2 },
+                };
+                addDrawingRefFn.current(curveDrawing);
+                setCurrentDrawingRefFn.current(curveDrawing);
+                curveInProgressRef.current = drawingId;
                 return;
             }
 
@@ -1720,6 +1788,26 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 }
                 return;
             }
+            const curveId = curveInProgressRef.current;
+            if (curveId && tool === 'curve') {
+                const chart = chartRef.current;
+                const series = seriesRef.current;
+                if (chart && series) {
+                    const { x, y } = getLocalXY(e);
+                    const previewPt = screenToChart(x, y);
+                    if (previewPt) {
+                        const curveDrawing = drawingsRef.current.find((d) => d.id === curveId);
+                        if (curveDrawing?.type === 'curve' && curveDrawing.points?.length === 1) {
+                            setCurrentDrawingRefFn.current({
+                                ...curveDrawing,
+                                points: [curveDrawing.points[0], previewPt],
+                            });
+                            setCurveLiveTick((t) => t + 1);
+                        }
+                    }
+                }
+                return;
+            }
             const fibRetracementId = fibRetracementInProgressRef.current;
             if (fibRetracementId && tool === 'fibonacci-retracement') {
                 const chart = chartRef.current;
@@ -1784,7 +1872,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 }
                 return;
             }
-            if (!isDrawing || (tool !== 'lines' && tool !== 'ray' && tool !== 'parallel-channel' && tool !== 'arrow-marker' && tool !== 'arrow' && tool !== 'arrow')) return;
+            if (!isDrawing || (tool !== 'lines' && tool !== 'ray' && tool !== 'info-line' && tool !== 'parallel-channel' && tool !== 'arrow-marker' && tool !== 'arrow')) return;
             const { x, y } = getLocalXY(e);
 
             const pt = screenToChart(x, y);
@@ -2061,7 +2149,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerDown = (e: PointerEvent) => {
             // If user is in a drawing tool, ignore selection logic
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'info-line' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range') return;
 
             const { x, y } = getLocalXY(e);
             const hoveredId = findHoveredHorizontalLineId(x, y);
@@ -2137,9 +2225,9 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         const startDrag = (e: PointerEvent) => {
             // don't interfere with drawing tools
             if (activeTool === 'lines' || activeTool === 'horizontal-line') return;
-            if (!hoveredHorizontalLineHandleId) return;
-
-            const id = hoveredHorizontalLineHandleId;
+            // Allow drag from anywhere on the line or from the handle
+            const id = hoveredHorizontalLineHandleId || hoveredHorizontalLineId;
+            if (!id) return;
             const targetDrawing = drawings.find((d) => d.id === id);
             if (targetDrawing?.locked) return;
             draggingHorizontalLineIdRef.current = id;
@@ -2188,7 +2276,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             document.removeEventListener('pointerup', stop, true);
             document.removeEventListener('pointercancel', stop, true);
         };
-    }, [activeTool, hoveredHorizontalLineHandleId, drawings, setSelectedHorizontalLineId, setSelectedDrawingId, updateDrawing]);
+    }, [activeTool, hoveredHorizontalLineHandleId, hoveredHorizontalLineId, drawings, setSelectedHorizontalLineId, setSelectedDrawingId, updateDrawing]);
 
     // ============================================================================
     // HORIZONTAL RAY TOOL: Interaction Logic (Hover + Select + Drag)
@@ -2258,7 +2346,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerMove = (e: PointerEvent) => {
             // Don't do hover detection while a drawing tool is active
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'info-line' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range') return;
 
             const { x, y } = getLocalXY(e);
             const hoveredId = findHoveredHorizontalRayId(x, y);
@@ -2306,7 +2394,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerDown = (e: PointerEvent) => {
             // If user is in a drawing tool, ignore selection logic
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'info-line' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range') return;
 
             const { x, y } = getLocalXY(e);
             const hoveredId = findHoveredHorizontalRayId(x, y);
@@ -2365,7 +2453,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const startDrag = (e: PointerEvent) => {
             // don't interfere with drawing tools
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'info-line' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range') return;
             if (!hoveredHorizontalRayHandleId) return;
 
             const id = hoveredHorizontalRayHandleId;
@@ -2496,12 +2584,49 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 }
             }
 
+            for (const d of drawings) {
+                if (d.type !== 'curve' || d.hidden || !d.points || d.points.length !== 3) continue;
+                const [pt0, pt1, pt2] = d.points;
+                let p0 = chartToScreen(pt0);
+                let p1 = chartToScreen(pt1);
+                let p2 = chartToScreen(pt2);
+                if (p0 && p2) {
+                    if (!p1) {
+                        const timeSpan = (pt2.time as number) - (pt0.time as number);
+                        const priceSpan = pt2.price - pt0.price;
+                        p1 = {
+                            x: timeSpan !== 0 ? (p0.x + (p2.x - p0.x) * ((pt1.time as number) - (pt0.time as number)) / timeSpan) : (p0.x + p2.x) / 2,
+                            y: priceSpan !== 0 ? (p0.y + (p2.y - p0.y) * (pt1.price - pt0.price) / priceSpan) : (p0.y + p2.y) / 2,
+                        };
+                    }
+                } else {
+                    if (!p0 && !p1 && !p2) continue;
+                    const ok = [p0, p1, p2].filter((p): p is { x: number; y: number } => p != null);
+                    if (ok.length < 2) continue;
+                    const mid = { x: ok.reduce((a, p) => a + p.x, 0) / ok.length, y: ok.reduce((a, p) => a + p.y, 0) / ok.length };
+                    p0 = p0 ?? mid;
+                    p1 = p1 ?? (p0 && p2 ? { x: (p0.x + p2.x) / 2, y: (p0.y + p2.y) / 2 } : mid);
+                    p2 = p2 ?? mid;
+                }
+                const samples = 36;
+                let bestD = Infinity;
+                for (let i = 0; i <= samples; i++) {
+                    const t = i / samples;
+                    const x = (1-t)*(1-t)*p0.x + 2*(1-t)*t*p1.x + t*t*p2.x;
+                    const y = (1-t)*(1-t)*p0.y + 2*(1-t)*t*p1.y + t*t*p2.y;
+                    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+                    const dist = Math.hypot(localX - x, localY - y);
+                    if (dist < bestD) bestD = dist;
+                }
+                if (bestD <= 14) return d.id;
+            }
+
             const thresholdPx = 8; // Distance threshold for line hover
             let bestId: string | null = null;
             let bestDist = Number.POSITIVE_INFINITY;
 
             for (const d of drawings) {
-                if (d.type !== 'lines' && d.type !== 'ray' && d.type !== 'parallel-channel' && d.type !== 'arrow-marker' && d.type !== 'arrow') continue;
+                if (d.type !== 'lines' && d.type !== 'ray' && d.type !== 'info-line' && d.type !== 'parallel-channel' && d.type !== 'arrow-marker' && d.type !== 'arrow') continue;
                 if (d.hidden) continue;
                 if (!d.points || d.points.length < 2) continue;
 
@@ -3133,6 +3258,49 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             }
 
             for (const d of drawings) {
+                if (d.type === 'curve' && !d.hidden && d.points && d.points.length === 3) {
+                    const [pt0, pt1, pt2] = d.points;
+                    let s0 = chartToScreen(pt0);
+                    let s1 = chartToScreen(pt1);
+                    let s2 = chartToScreen(pt2);
+                    if (s0 && s2) {
+                        if (!s1) {
+                            const timeSpan = (pt2.time as number) - (pt0.time as number);
+                            const priceSpan = pt2.price - pt0.price;
+                            s1 = {
+                                x: timeSpan !== 0 ? (s0.x + (s2.x - s0.x) * ((pt1.time as number) - (pt0.time as number)) / timeSpan) : (s0.x + s2.x) / 2,
+                                y: priceSpan !== 0 ? (s0.y + (s2.y - s0.y) * (pt1.price - pt0.price) / priceSpan) : (s0.y + s2.y) / 2,
+                            };
+                        }
+                        const d0 = Math.hypot(localX - s0.x, localY - s0.y);
+                        const d2 = Math.hypot(localX - s2.x, localY - s2.y);
+                        const midX = 0.25 * s0.x + 0.5 * s1.x + 0.25 * s2.x;
+                        const midY = 0.25 * s0.y + 0.5 * s1.y + 0.25 * s2.y;
+                        const dMid = Math.hypot(localX - midX, localY - midY);
+                        if (d0 <= handleRadius && d0 < bestDist) { bestDist = d0; bestHandle = `${d.id}:start`; }
+                        if (dMid <= handleRadius && dMid < bestDist) { bestDist = dMid; bestHandle = `${d.id}:control`; }
+                        if (d2 <= handleRadius && d2 < bestDist) { bestDist = d2; bestHandle = `${d.id}:end`; }
+                    } else {
+                        const ok = [s0, s1, s2].filter((p): p is { x: number; y: number } => p != null);
+                        if (ok.length >= 2) {
+                            const mid = { x: ok.reduce((a, p) => a + p.x, 0) / ok.length, y: ok.reduce((a, p) => a + p.y, 0) / ok.length };
+                            s0 = s0 ?? mid;
+                            s1 = s1 ?? (s0 && s2 ? { x: (s0.x + s2.x) / 2, y: (s0.y + s2.y) / 2 } : mid);
+                            s2 = s2 ?? mid;
+                            const d0 = Math.hypot(localX - s0.x, localY - s0.y);
+                            const d2 = Math.hypot(localX - s2.x, localY - s2.y);
+                            const midX = 0.25 * s0.x + 0.5 * s1.x + 0.25 * s2.x;
+                            const midY = 0.25 * s0.y + 0.5 * s1.y + 0.25 * s2.y;
+                            const dMid = Math.hypot(localX - midX, localY - midY);
+                            if (d0 <= handleRadius && d0 < bestDist) { bestDist = d0; bestHandle = `${d.id}:start`; }
+                            if (dMid <= handleRadius && dMid < bestDist) { bestDist = dMid; bestHandle = `${d.id}:control`; }
+                            if (d2 <= handleRadius && d2 < bestDist) { bestDist = d2; bestHandle = `${d.id}:end`; }
+                        }
+                    }
+                }
+            }
+
+            for (const d of drawings) {
                 if ((d.type === 'arrow-markup' || d.type === 'arrow-markdown') && !d.hidden && d.points && d.points.length >= 1) {
                     const scr = chartToScreen(d.points[0]);
                     if (scr) {
@@ -3147,7 +3315,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             }
 
             for (const d of drawings) {
-                if (d.type !== 'lines' && d.type !== 'ray' && d.type !== 'parallel-channel' && d.type !== 'arrow-marker' && d.type !== 'arrow') continue;
+                if (d.type !== 'lines' && d.type !== 'ray' && d.type !== 'info-line' && d.type !== 'parallel-channel' && d.type !== 'arrow-marker' && d.type !== 'arrow') continue;
                 if (d.hidden) continue;
                 if (!d.points || d.points.length < 2) continue;
 
@@ -3226,7 +3394,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerMove = (e: PointerEvent) => {
             // Don't do hover detection while a drawing tool is active
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'date-price-range' || activeTool === 'fibonacci-retracement' || activeTool === 'gann-box' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle' || activeTool === 'emoji' || activeTool === 'arrow-markup' || activeTool === 'arrow-markdown') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'info-line' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'date-price-range' || activeTool === 'fibonacci-retracement' || activeTool === 'gann-box' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle' || activeTool === 'curve' || activeTool === 'emoji' || activeTool === 'arrow-markup' || activeTool === 'arrow-markdown') return;
 
             const { x, y } = getLocalXY(e);
 
@@ -3329,7 +3497,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const onPointerDown = (e: PointerEvent) => {
             // If user is in a drawing tool, ignore selection logic
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'date-price-range' || activeTool === 'fibonacci-retracement' || activeTool === 'gann-box' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle' || activeTool === 'emoji' || activeTool === 'arrow-markup' || activeTool === 'arrow-markdown') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'info-line' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'date-price-range' || activeTool === 'fibonacci-retracement' || activeTool === 'gann-box' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle' || activeTool === 'curve' || activeTool === 'emoji' || activeTool === 'arrow-markup' || activeTool === 'arrow-markdown') return;
 
             const { x, y } = getLocalXY(e);
             const handleId = findHoveredHandle(x, y);
@@ -3401,23 +3569,37 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                         setSelectedLineId(null);
                         // Only clear selectedDrawingId if it's currently a lines, ray, long-position, short-position, or price-range tool
                         const currentSelected = drawings.find(d => d.id === selectedDrawingId);
-                        if (currentSelected?.type === 'lines' || currentSelected?.type === 'ray' || currentSelected?.type === 'long-position' || currentSelected?.type === 'short-position' || currentSelected?.type === 'price-range' || currentSelected?.type === 'date-range' || currentSelected?.type === 'date-price-range' || currentSelected?.type === 'fibonacci-retracement' || currentSelected?.type === 'gann-box' || currentSelected?.type === 'brush' || currentSelected?.type === 'rectangle' || currentSelected?.type === 'path' || currentSelected?.type === 'circle' || currentSelected?.type === 'arrow-markup' || currentSelected?.type === 'arrow-markdown') {
+                        if (currentSelected?.type === 'lines' || currentSelected?.type === 'ray' || currentSelected?.type === 'info-line' || currentSelected?.type === 'long-position' || currentSelected?.type === 'short-position' || currentSelected?.type === 'price-range' || currentSelected?.type === 'date-range' || currentSelected?.type === 'date-price-range' || currentSelected?.type === 'fibonacci-retracement' || currentSelected?.type === 'gann-box' || currentSelected?.type === 'brush' || currentSelected?.type === 'rectangle' || currentSelected?.type === 'path' || currentSelected?.type === 'circle' || currentSelected?.type === 'arrow-markup' || currentSelected?.type === 'arrow-markdown' || currentSelected?.type === 'curve') {
                             setSelectedDrawingId(null);
                         }
                     }
             }
         };
 
+        const onDoubleClick = (e: MouseEvent) => {
+            if (activeTool !== null) return;
+            const id = selectedDrawingId;
+            if (!id) return;
+            const targetDrawing = drawings.find((d) => d.id === id);
+            if (targetDrawing?.type !== 'info-line') return;
+            const newLabel = window.prompt('Label for info line:', targetDrawing.label ?? '');
+            if (newLabel !== null) {
+                updateDrawing(id, (prev) => ({ ...prev, label: newLabel }));
+            }
+        };
+
         container.addEventListener('pointermove', onPointerMove);
         container.addEventListener('pointerleave', onPointerLeave);
         container.addEventListener('pointerdown', onPointerDown);
+        container.addEventListener('dblclick', onDoubleClick);
 
         return () => {
             container.removeEventListener('pointermove', onPointerMove);
             container.removeEventListener('pointerleave', onPointerLeave);
             container.removeEventListener('pointerdown', onPointerDown);
+            container.removeEventListener('dblclick', onDoubleClick);
         };
-        }, [drawings, activeTool, selectedDrawingId, setHoveredLineId, setHoveredLineHandleId, setSelectedLineId, setSelectedDrawingId, setSelectedHorizontalLineId]);
+        }, [drawings, activeTool, selectedDrawingId, setHoveredLineId, setHoveredLineHandleId, setSelectedLineId, setSelectedDrawingId, setSelectedHorizontalLineId, updateDrawing]);
 
     // ============================================================================
     // LINES TOOL: Drag Logic
@@ -3430,7 +3612,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
     // NOTE: Also handles line body drag (moving entire line)
     // NOTE: Also handles parallel-channel body drag (moving entire channel)
     // NOTE: Also handles long-position body drag (moving entire RR box)
-    const draggingLineHandleRef = useRef<{ lineId: string; handle: 'start' | 'end' | 'start1' | 'end1' | 'start2' | 'end2' | 'mid1' | 'mid2' | 'top-left' | 'bottom-left' | 'right-middle' | 'left-middle' | 'line-body' | 'parallel-channel-body' | 'long-position-body' | 'price-range-body' | 'price-range-start' | 'price-range-end' | 'date-range-body' | 'date-range-start' | 'date-range-end' | 'date-price-range-body' | 'date-price-range-start' | 'date-price-range-end' | 'fib-retracement-body' | 'fib-retracement-start' | 'fib-retracement-end' | 'gann-box-body' | 'gann-corner-tl' | 'gann-corner-tr' | 'gann-corner-bl' | 'gann-corner-br' | 'brush-body' | 'rectangle-body' | 'rect-corner-tl' | 'rect-corner-tr' | 'rect-corner-bl' | 'rect-corner-br' | 'rect-edge-left' | 'rect-edge-right' | 'rect-edge-top' | 'rect-edge-bottom' | 'path-body' | 'path-vertex' | 'circle-body' | 'circle-center' | 'circle-radius' | 'arrow-markup-body'; pathVertexIndex?: number; initialClickTime?: number; initialClickPrice?: number; initialStartTime?: number; initialStartPrice?: number; initialEndTime?: number; initialEndPrice?: number; initialStart1Time?: number; initialStart1Price?: number; initialEnd1Time?: number; initialEnd1Price?: number; initialStart2Time?: number; initialStart2Price?: number; initialEnd2Time?: number; initialEnd2Price?: number; initialEntryPrice?: number; initialStopLoss?: number; initialTakeProfit?: number; initialLongPositionStartTime?: number; initialLongPositionEndTime?: number; initialPointerX?: number; initialPointerY?: number; initialScreenPoints?: { x: number; y: number }[]; initialChartPoints?: { time: number; price: number }[] } | null>(null);
+    const draggingLineHandleRef = useRef<{ lineId: string; handle: 'start' | 'end' | 'control' | 'start1' | 'end1' | 'start2' | 'end2' | 'mid1' | 'mid2' | 'top-left' | 'bottom-left' | 'right-middle' | 'left-middle' | 'line-body' | 'parallel-channel-body' | 'long-position-body' | 'price-range-body' | 'price-range-start' | 'price-range-end' | 'date-range-body' | 'date-range-start' | 'date-range-end' | 'date-price-range-body' | 'date-price-range-start' | 'date-price-range-end' | 'fib-retracement-body' | 'fib-retracement-start' | 'fib-retracement-end' | 'gann-box-body' | 'gann-corner-tl' | 'gann-corner-tr' | 'gann-corner-bl' | 'gann-corner-br' | 'brush-body' | 'rectangle-body' | 'rect-corner-tl' | 'rect-corner-tr' | 'rect-corner-bl' | 'rect-corner-br' | 'rect-edge-left' | 'rect-edge-right' | 'rect-edge-top' | 'rect-edge-bottom' | 'path-body' | 'path-vertex' | 'circle-body' | 'circle-center' | 'circle-radius' | 'arrow-markup-body' | 'curve-body'; pathVertexIndex?: number; initialClickTime?: number; initialClickPrice?: number; initialStartTime?: number; initialStartPrice?: number; initialEndTime?: number; initialEndPrice?: number; initialStart1Time?: number; initialStart1Price?: number; initialEnd1Time?: number; initialEnd1Price?: number; initialStart2Time?: number; initialStart2Price?: number; initialEnd2Time?: number; initialEnd2Price?: number; initialEntryPrice?: number; initialStopLoss?: number; initialTakeProfit?: number; initialLongPositionStartTime?: number; initialLongPositionEndTime?: number; initialPointerX?: number; initialPointerY?: number; initialScreenPoints?: { x: number; y: number }[]; initialChartPoints?: { time: number; price: number }[] } | null>(null);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -3479,7 +3661,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
             let bestDist = Number.POSITIVE_INFINITY;
 
             for (const d of drawings) {
-                if (d.type !== 'lines' && d.type !== 'ray' && d.type !== 'arrow-marker' && d.type !== 'arrow') continue;
+                if (d.type !== 'lines' && d.type !== 'ray' && d.type !== 'info-line' && d.type !== 'arrow-marker' && d.type !== 'arrow') continue;
                 if (d.hidden) continue;
                 if (!d.points || d.points.length < 2) continue;
 
@@ -3704,7 +3886,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
         const startDrag = (e: PointerEvent) => {
             // don't interfere with drawing tools
-            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'date-price-range' || activeTool === 'fibonacci-retracement' || activeTool === 'gann-box' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle') return;
+            if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'info-line' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel' || activeTool === 'long-position' || activeTool === 'short-position' || activeTool === 'price-range' || activeTool === 'date-range' || activeTool === 'date-price-range' || activeTool === 'fibonacci-retracement' || activeTool === 'gann-box' || activeTool === 'brush' || activeTool === 'rectangle' || activeTool === 'path' || activeTool === 'circle' || activeTool === 'curve') return;
 
             const { x, y } = getLocalXY(e);
             const chart = chartRef.current;
@@ -4414,7 +4596,40 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     return;
                 }
 
-                if (targetDrawing.type !== 'lines' && targetDrawing.type !== 'ray' && targetDrawing.type !== 'arrow-marker' && targetDrawing.type !== 'arrow') return;
+                if (targetDrawing.type === 'curve' && targetDrawing.points && targetDrawing.points.length === 3) {
+                    const clickTime = getTimeFromX(chart, x);
+                    const clickPrice = series.coordinateToPrice(y);
+                    if (clickTime == null || clickPrice == null) return;
+                    const [p0, p1, p2] = targetDrawing.points;
+                    draggingLineHandleRef.current = {
+                        lineId,
+                        handle: 'curve-body',
+                        initialClickTime: clickTime,
+                        initialClickPrice: clickPrice,
+                        initialStartTime: p0.time as number,
+                        initialStartPrice: p0.price,
+                        initialStart1Time: p1.time as number,
+                        initialStart1Price: p1.price,
+                        initialEndTime: p2.time as number,
+                        initialEndPrice: p2.price,
+                    };
+                    setSelectedLineId(lineId);
+                    setSelectedDrawingId(lineId);
+                    try { container.setPointerCapture(e.pointerId); } catch {}
+                    const chartContainer = (chart as any).chartElement?.parentElement || container;
+                    if (chartContainer) {
+                        const canvas = chartContainer.querySelector('canvas');
+                        if (canvas) {
+                            (canvas as any).__originalPointerEvents = canvas.style.pointerEvents;
+                            canvas.style.pointerEvents = 'none';
+                        }
+                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+
+                if (targetDrawing.type !== 'lines' && targetDrawing.type !== 'ray' && targetDrawing.type !== 'info-line' && targetDrawing.type !== 'arrow-marker' && targetDrawing.type !== 'arrow') return;
                 if (!targetDrawing.points || targetDrawing.points.length < 2) return;
 
                 const clickTime = getTimeFromX(chart, x);
@@ -4902,7 +5117,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
 
                 // Move both start and end points by the offset
                 updateDrawing(drag.lineId, (prev) => {
-                    if ((prev.type === 'lines' || prev.type === 'ray' || prev.type === 'arrow-marker' || prev.type === 'arrow') && prev.points && prev.points.length >= 2) {
+                    if ((prev.type === 'lines' || prev.type === 'ray' || prev.type === 'info-line' || prev.type === 'arrow-marker' || prev.type === 'arrow') && prev.points && prev.points.length >= 2) {
                         return {
                             ...prev,
                             points: [
@@ -4915,7 +5130,36 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                 });
                 return;
             }
-            
+
+            if (drag.handle === 'curve-body') {
+                if (drag.initialClickTime == null || drag.initialClickPrice == null ||
+                    drag.initialStartTime == null || drag.initialStartPrice == null ||
+                    drag.initialStart1Time == null || drag.initialStart1Price == null ||
+                    drag.initialEndTime == null || drag.initialEndPrice == null) return;
+
+                const currentTime = getTimeFromX(chart, x);
+                const currentPrice = series.coordinateToPrice(y);
+                if (currentTime == null || currentPrice == null) return;
+
+                const timeOffset = currentTime - drag.initialClickTime;
+                const priceOffset = currentPrice - drag.initialClickPrice;
+
+                updateDrawing(drag.lineId, (prev) => {
+                    if (prev.type === 'curve' && prev.points && prev.points.length === 3) {
+                        return {
+                            ...prev,
+                            points: [
+                                { time: drag.initialStartTime! + timeOffset, price: drag.initialStartPrice! + priceOffset },
+                                { time: drag.initialStart1Time! + timeOffset, price: drag.initialStart1Price! + priceOffset },
+                                { time: drag.initialEndTime! + timeOffset, price: drag.initialEndPrice! + priceOffset },
+                            ],
+                        };
+                    }
+                    return prev;
+                });
+                return;
+            }
+
             // Handle price-range free handles (start and end; drag only that point)
             if (drag.handle === 'price-range-start' || drag.handle === 'price-range-end') {
                 const chart = chartRef.current;
@@ -5234,7 +5478,19 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     }
                     
                     return { ...prev, points: newPoints };
-                } else if ((prev.type === 'lines' || prev.type === 'ray' || prev.type === 'arrow-marker' || prev.type === 'arrow') && prev.points && prev.points.length >= 2) {
+                } else if (prev.type === 'curve' && prev.points && prev.points.length === 3) {
+                    const newPoints = [...prev.points];
+                    const [p0, prevCtrl, p2] = prev.points;
+                    if (drag.handle === 'start') newPoints[0] = newPoint;
+                    else if (drag.handle === 'control') {
+                        let ctrlTime = 2 * newPoint.time - 0.5 * p0.time - 0.5 * p2.time;
+                        let ctrlPrice = 2 * newPoint.price - 0.5 * p0.price - 0.5 * p2.price;
+                        if (!Number.isFinite(ctrlTime)) ctrlTime = prevCtrl.time;
+                        if (!Number.isFinite(ctrlPrice)) ctrlPrice = prevCtrl.price;
+                        newPoints[1] = { time: ctrlTime, price: ctrlPrice };
+                    } else if (drag.handle === 'end') newPoints[2] = newPoint;
+                    return { ...prev, points: newPoints };
+                } else if ((prev.type === 'lines' || prev.type === 'ray' || prev.type === 'info-line' || prev.type === 'arrow-marker' || prev.type === 'arrow') && prev.points && prev.points.length >= 2) {
                     // Lines/Ray: simple update
                     const newPoints = [...prev.points];
                     if (drag.handle === 'start') {
@@ -5301,7 +5557,7 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         const interactionLayer = interactionLayerRef.current;
         let cursorStyle = 'default';
         
-        if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel') {
+        if (activeTool === 'lines' || activeTool === 'ray' || activeTool === 'info-line' || activeTool === 'horizontal-line' || activeTool === 'horizontal-ray' || activeTool === 'parallel-channel') {
             cursorStyle = 'crosshair';
         } else if (hoveredLineHandleId) {
             // Check if it's a middle square (for parallel channel width adjustment)

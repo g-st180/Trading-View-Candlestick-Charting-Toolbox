@@ -214,13 +214,13 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
 	const [showLinesMenu, setShowLinesMenu] = useState(false);
 	const [hoveredLinesItemId, setHoveredLinesItemId] = useState<string | null>(null);
-	const [selectedLinesType, setSelectedLinesType] = useState<'lines' | 'ray' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel'>('lines');
+	const [selectedLinesType, setSelectedLinesType] = useState<'lines' | 'ray' | 'info-line' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel'>('lines');
 	const [showProjectionMenu, setShowProjectionMenu] = useState(false);
 	const [hoveredProjectionItemId, setHoveredProjectionItemId] = useState<string | null>(null);
 	const [selectedProjectionType, setSelectedProjectionType] = useState<'long-position' | 'short-position' | 'price-range' | 'date-range' | 'date-price-range'>('long-position');
 	const [showShapesMenu, setShowShapesMenu] = useState(false);
 	const [hoveredShapesItemId, setHoveredShapesItemId] = useState<string | null>(null);
-	const [selectedShapesType, setSelectedShapesType] = useState<'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle'>('brush');
+	const [selectedShapesType, setSelectedShapesType] = useState<'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle' | 'curve'>('brush');
 	const [showFibonacciMenu, setShowFibonacciMenu] = useState(false);
 	const [hoveredFibonacciItemId, setHoveredFibonacciItemId] = useState<string | null>(null);
 	const [selectedFibonacciType, setSelectedFibonacciType] = useState<'fibonacci-retracement' | 'gann-box'>('fibonacci-retracement');
@@ -290,6 +290,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 
 	const linesMenuItems = [
 		{ id: 'lines', label: 'Trend line', icon: 'ray' },
+		{ id: 'info-line', label: 'Info line', icon: 'info-line' },
 		{ id: 'ray', label: 'Ray', icon: 'ray-line' },
 		{ id: 'horizontal-line', label: 'Horizontal line', icon: 'hline' },
 		{ id: 'horizontal-ray', label: 'Horizontal ray', icon: 'hray' },
@@ -322,6 +323,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		{ id: 'rectangle', label: 'Rectangle', icon: 'rectangle' },
 		{ id: 'path', label: 'Path', icon: 'path' },
 		{ id: 'circle', label: 'Circle', icon: 'circle' },
+		{ id: 'curve', label: 'Curve', icon: 'curve' },
 	];
 
 	const fibonacciMenuItems: Array<{ id: 'fibonacci-retracement' | 'gann-box'; label: string; icon: string }> = [
@@ -869,11 +871,11 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							</Icon>
 						) : selectedShapesType === 'arrow-markup' ? (
 							<Icon className="h-7 w-7" strokeWidth={0}>
-								<path d="M12 4 L7 14 L10 14 L10 20 L14 20 L14 14 L17 14 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
+								<path d="M12 5 L7 10 L10 10 L10 18 L14 18 L14 10 L17 10 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
 							</Icon>
 						) : selectedShapesType === 'arrow-markdown' ? (
 							<Icon className="h-7 w-7" strokeWidth={0}>
-								<path d="M12 20 L7 10 L10 10 L10 4 L14 4 L14 10 L17 10 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
+								<path d="M12 19 L7 14 L10 14 L10 6 L14 6 L14 14 L17 14 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
 							</Icon>
 						) : selectedShapesType === 'rectangle' ? (
 							<Icon className="h-7 w-7" strokeWidth={1}>
@@ -894,6 +896,13 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 								<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" />
 								<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" />
 								<circle cx="20" cy="12" r="1.6" fill="white" stroke="currentColor" />
+							</Icon>
+						) : selectedShapesType === 'curve' ? (
+							<Icon className="h-7 w-7" strokeWidth={1}>
+								<path d="M4 18 Q12 6 20 18" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+								<circle cx="4" cy="18" r="1.6" fill="white" stroke="currentColor" />
+								<circle cx="12" cy="6" r="1.6" fill="white" stroke="currentColor" />
+								<circle cx="20" cy="18" r="1.6" fill="white" stroke="currentColor" />
 							</Icon>
 						) : (
 							tool.icon
@@ -926,7 +935,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										key={item.id}
 										type="button"
 										onClick={() => {
-											setSelectedShapesType(item.id as 'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle');
+											setSelectedShapesType(item.id as 'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle' | 'curve');
 											setActiveTool(item.id as any);
 											setShowShapesMenu(false);
 										}}
@@ -965,7 +974,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										key={item.id}
 										type="button"
 										onClick={() => {
-											setSelectedShapesType(item.id as 'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle');
+											setSelectedShapesType(item.id as 'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle' | 'curve');
 											setActiveTool(item.id as any);
 											setShowShapesMenu(false);
 										}}
@@ -991,12 +1000,12 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 											)}
 											{item.icon === 'arrow-markup' && (
 												<Icon className="h-7 w-7" strokeWidth={0}>
-													<path d="M12 4 L7 14 L10 14 L10 20 L14 20 L14 14 L17 14 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
+													<path d="M12 5 L7 10 L10 10 L10 18 L14 18 L14 10 L17 10 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
 												</Icon>
 											)}
 											{item.icon === 'arrow-markdown' && (
 												<Icon className="h-7 w-7" strokeWidth={0}>
-													<path d="M12 20 L7 10 L10 10 L10 4 L14 4 L14 10 L17 10 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
+													<path d="M12 19 L7 14 L10 14 L10 6 L14 6 L14 14 L17 14 Z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="miter" />
 												</Icon>
 											)}
 											{item.label}
@@ -1020,7 +1029,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										key={item.id}
 										type="button"
 										onClick={() => {
-											setSelectedShapesType(item.id as 'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle');
+											setSelectedShapesType(item.id as 'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle' | 'curve');
 											setActiveTool(item.id as any);
 											setShowShapesMenu(false);
 										}}
@@ -1053,6 +1062,14 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 													<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" />
 													<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" />
 													<circle cx="20" cy="12" r="1.6" fill="white" stroke="currentColor" />
+												</Icon>
+											)}
+											{item.icon === 'curve' && (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+													<path d="M4 18 Q12 6 20 18" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+													<circle cx="4" cy="18" r="1.6" fill="white" stroke="currentColor" />
+													<circle cx="12" cy="6" r="1.6" fill="white" stroke="currentColor" />
+													<circle cx="20" cy="18" r="1.6" fill="white" stroke="currentColor" />
 												</Icon>
 											)}
 											{item.label}
@@ -1117,6 +1134,13 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 								<path d="M6 17L18 7" stroke="currentColor" strokeWidth={1} />
 								<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 							</Icon>
+						) : selectedLinesType === 'info-line' ? (
+							<Icon>
+								<path d="M5 19L19 5" />
+								<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+								<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+								<rect x="8" y="10" width="8" height="5" rx="1" fill="currentColor" opacity={0.25} stroke="currentColor" strokeWidth={0.8} />
+							</Icon>
 						) : (
 							tool.icon
 						)}
@@ -1159,6 +1183,14 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 													<path d="M5 19L19 5" />
 													<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
 													<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+												</Icon>
+											)}
+											{item.icon === 'info-line' && (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+													<path d="M5 19L19 5" />
+													<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+													<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+													<rect x="8" y="10" width="8" height="5" rx="1" fill="currentColor" opacity={0.25} stroke="currentColor" strokeWidth={0.8} />
 												</Icon>
 											)}
 											{item.icon === 'ray-line' && (

@@ -1473,9 +1473,9 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				ctx.arc(right, bottom, handleRadius, 0, 2 * Math.PI);
 				ctx.fill();
 				ctx.stroke();
-				// 4 edge-center squares (resize width/height) – same style as horizontal line
+				// 4 edge-center squares (resize width/height) – blue boundary
 				ctx.fillStyle = '#ffffff';
-				ctx.strokeStyle = '#000000';
+				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
 				ctx.lineWidth = 1.5;
 				const drawRectEdgeSquare = (x: number, y: number, handleId: string) => {
 					ctx.save();
@@ -2102,19 +2102,20 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				ctx.restore();
 			}
 
-			// Draw hollow rounded corner square on the right border (only if hovered/selected)
+			// Draw rounded corner square on the right border (only if hovered/selected) – opaque white fill so line doesn't show through
 			if (shouldShowSquare) {
 				const isHandleHovered = hoveredHorizontalLineHandleIdRef.current === drawing.id;
 				ctx.save();
+				ctx.fillStyle = '#ffffff';
 				ctx.strokeStyle = lineColor;
 				ctx.lineWidth = 1.5;
 				if (isHandleHovered) {
 					ctx.shadowColor = 'rgba(59, 130, 246, 0.9)';
 					ctx.shadowBlur = 8;
 				}
-				// Important: start a new path so we don't re-stroke the line with shadow
 				ctx.beginPath();
 				drawRoundedRect(ctx, squareX, squareY, squareSize, squareSize, borderRadius);
+				ctx.fill();
 				ctx.stroke();
 				ctx.restore();
 			}
@@ -2123,8 +2124,8 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			return;
 		}
 
-		// Chart-space Lines/Ray tool: show first bubble immediately (before second click)
-		if ((drawing.type === 'lines' || drawing.type === 'ray' || drawing.type === 'arrow-marker' || drawing.type === 'arrow') && drawing.points && drawing.points.length === 1) {
+		// Chart-space Lines/Ray/Info-line tool: show first bubble immediately (before second click)
+		if ((drawing.type === 'lines' || drawing.type === 'ray' || drawing.type === 'info-line' || drawing.type === 'arrow-marker' || drawing.type === 'arrow') && drawing.points && drawing.points.length === 1) {
 			const p = chartToScreen(drawing.points[0]);
 			if (!p) return;
 			ctx.save();
@@ -2311,6 +2312,117 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			return;
 		}
 
+		// Curve: quadratic Bezier with start, control (middle lever), end. Supports 1 pt (bubble only), 2 pts (preview), 3 pts (full).
+		if (drawing.type === 'curve' && drawing.points && drawing.points.length >= 1) {
+			let pts: { x: number; y: number }[] = [];
+			if (drawing.points.length === 3) {
+				const [p0, p1, p2] = drawing.points;
+				let s0 = chartToScreen(p0);
+				let s1 = chartToScreen(p1);
+				let s2 = chartToScreen(p2);
+				const valid = (s: { x: number; y: number } | null) => s != null && Number.isFinite(s.x) && Number.isFinite(s.y);
+				if (valid(s0) && valid(s2)) {
+					const s0v = s0 as { x: number; y: number };
+					const s2v = s2 as { x: number; y: number };
+					let s1v: { x: number; y: number };
+					if (!valid(s1)) {
+						const timeSpan = (p2.time as number) - (p0.time as number);
+						const priceSpan = p2.price - p0.price;
+						s1v = {
+							x: timeSpan !== 0 ? (s0v.x + (s2v.x - s0v.x) * ((p1.time as number) - (p0.time as number)) / timeSpan) : (s0v.x + s2v.x) / 2,
+							y: priceSpan !== 0 ? (s0v.y + (s2v.y - s0v.y) * (p1.price - p0.price) / priceSpan) : (s0v.y + s2v.y) / 2,
+						};
+					} else {
+						s1v = s1 as { x: number; y: number };
+					}
+					pts = [s0v, s1v, s2v];
+				} else {
+					const ok = [s0, s1, s2].filter((p): p is { x: number; y: number } => valid(p));
+					if (ok.length === 0) return;
+					const mid = ok.length >= 2 ? { x: ok.reduce((a, p) => a + p.x, 0) / ok.length, y: ok.reduce((a, p) => a + p.y, 0) / ok.length } : ok[0];
+					pts = [s0 && valid(s0) ? s0 : mid, s1 && valid(s1) ? s1 : mid, s2 && valid(s2) ? s2 : mid];
+				}
+			} else {
+				pts = drawing.points.map(chartToScreen).filter((p): p is { x: number; y: number } => p !== null);
+			}
+			if (pts.length < 1) return;
+			const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
+			const isHovered = hoveredLineIdRef.current === drawing.id;
+			const isSelected = selectedLineIdRef.current === drawing.id;
+			const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
+
+			const plotW = plotWidth || container.getBoundingClientRect().width;
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotW, container.getBoundingClientRect().height);
+			ctx.clip();
+
+			const color = drawing.style?.color || '#3b82f6';
+			ctx.strokeStyle = color;
+			ctx.lineWidth = drawing.style?.width ?? 2;
+			ctx.lineCap = 'round';
+			ctx.lineJoin = 'round';
+
+			if (pts.length === 1) {
+				if (shouldShowBubbles) {
+					const r = 5;
+					ctx.fillStyle = '#ffffff';
+					ctx.strokeStyle = color;
+					ctx.lineWidth = 1.5;
+					ctx.beginPath();
+					ctx.arc(pts[0].x, pts[0].y, r, 0, Math.PI * 2);
+					ctx.fill();
+					ctx.stroke();
+				}
+			} else if (pts.length === 2) {
+				const [p0, p1] = pts;
+				const midX = (p0.x + p1.x) / 2, midY = (p0.y + p1.y) / 2;
+				const dx = p1.x - p0.x, dy = p1.y - p0.y;
+				const len = Math.hypot(dx, dy) || 1;
+				const offset = len * 0.4;
+				const perpX = -dy / len * offset, perpY = dx / len * offset;
+				const ctrl = { x: midX + perpX, y: midY + perpY };
+				ctx.beginPath();
+				ctx.moveTo(p0.x, p0.y);
+				ctx.quadraticCurveTo(ctrl.x, ctrl.y, p1.x, p1.y);
+				ctx.stroke();
+				if (shouldShowBubbles) {
+					const r = 5;
+					ctx.fillStyle = '#ffffff';
+					ctx.strokeStyle = color;
+					ctx.lineWidth = 1.5;
+					ctx.beginPath();
+					ctx.arc(p0.x, p0.y, r, 0, Math.PI * 2);
+					ctx.fill();
+					ctx.stroke();
+				}
+			} else {
+				const [p0, ctrl, p2] = pts;
+				ctx.beginPath();
+				ctx.moveTo(p0.x, p0.y);
+				ctx.quadraticCurveTo(ctrl.x, ctrl.y, p2.x, p2.y);
+				ctx.stroke();
+				if (shouldShowBubbles) {
+					const r = 5;
+					ctx.fillStyle = '#ffffff';
+					ctx.strokeStyle = color;
+					ctx.lineWidth = 1.5;
+					const midOnCurve = {
+						x: 0.25 * p0.x + 0.5 * ctrl.x + 0.25 * p2.x,
+						y: 0.25 * p0.y + 0.5 * ctrl.y + 0.25 * p2.y,
+					};
+					for (const p of [p0, midOnCurve, p2]) {
+						ctx.beginPath();
+						ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+						ctx.fill();
+						ctx.stroke();
+					}
+				}
+			}
+			ctx.restore();
+			return;
+		}
+
 		if (!drawing.points || drawing.points.length < 2) return;
 
 		// Convert chart coordinates to screen coordinates
@@ -2434,6 +2546,186 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				}
 			}
 
+			ctx.restore();
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
+		// INFO LINE: trend line + gray info box below with 3 stats + optional center label
+		// ============================================================================
+		if (drawing.type === 'info-line' && drawing.points && drawing.points.length >= 2 && screenPoints.length >= 2) {
+			const start = screenPoints[0];
+			const end = screenPoints[screenPoints.length - 1];
+			const p0 = drawing.points[0];
+			const p1 = drawing.points[1];
+			const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
+			const isHovered = hoveredLineIdRef.current === drawing.id;
+			const isSelected = selectedLineIdRef.current === drawing.id;
+			const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
+			const plotW = plotWidth || container.getBoundingClientRect().width;
+			const plotH = container.getBoundingClientRect().height;
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotW, plotH);
+			ctx.clip();
+
+			// 1. Draw the trend line (always on overlay so it's visible; info-line has no underlay primitive)
+			ctx.strokeStyle = drawing.style?.color || '#3b82f6';
+			ctx.lineWidth = drawing.style?.width ?? 2;
+			ctx.lineCap = 'round';
+			ctx.beginPath();
+			ctx.moveTo(start.x, start.y);
+			ctx.lineTo(end.x, end.y);
+			ctx.stroke();
+
+			// 2. Stats for the gray box
+			const priceDiff = p1.price - p0.price;
+			const pct = p0.price !== 0 ? (priceDiff / p0.price) * 100 : 0;
+			const line1 = `${priceDiff >= 0 ? '+' : ''}${priceDiff.toFixed(2)} (${pct >= 0 ? '' : ''}${pct.toFixed(2)}%)`;
+			const bars = candlestickDataRef?.current ?? [];
+			const minT = Math.min(p0.time as number, p1.time as number);
+			const maxT = Math.max(p0.time as number, p1.time as number);
+			const barCount = bars.filter((b) => (b.time as number) >= minT && (b.time as number) <= maxT).length;
+			const timeSpanSec = Math.abs((p1.time as number) - (p0.time as number));
+			const daysNum = timeSpanSec / 86400;
+			const timeStr = daysNum >= 1 ? `${Math.round(daysNum)}d` : `${(timeSpanSec / 3600).toFixed(1)}h`;
+			const distPx = Math.round(Math.hypot(end.x - start.x, end.y - start.y));
+			const line2 = `${barCount} bars (${timeStr}), distance: ${distPx} px`;
+			const angleRad = Math.atan2(start.y - end.y, end.x - start.x);
+			const angleDeg = (angleRad * 180 / Math.PI).toFixed(2);
+			const line3 = `${angleDeg}°`;
+
+			// 3. Gray box offset perpendicular to the line so it never overlaps the segment
+			const midX = (start.x + end.x) / 2;
+			const midY = (start.y + end.y) / 2;
+			const dx = end.x - start.x;
+			const dy = end.y - start.y;
+			const len = Math.hypot(dx, dy) || 1;
+			const boxPad = 18;
+			const lineHeight = 17;
+			const lineSpacing = 30;
+			const iconSize = 14;
+			const iconGap = 12;
+			const font = '13px system-ui, sans-serif';
+			ctx.font = font;
+			const w1 = ctx.measureText(line1).width;
+			const w2 = ctx.measureText(line2).width;
+			const w3 = ctx.measureText(line3).width;
+			const textWidth = Math.max(w1, w2, w3);
+			const boxW = boxPad * 2 + iconSize + iconGap + textWidth;
+			const boxH = boxPad * 2 + lineSpacing * 2 + lineHeight;
+			// Unit perpendicular pointing to one side of the line (so box stays off the segment)
+			const perpX = -dy / len;
+			const perpY = dx / len;
+			// Fixed perpendicular gap from line to nearest edge of box (half-extent of rect in perp direction)
+			const fixedGap = 20;
+			const boxHalfExtentInPerp = (boxW / 2) * Math.abs(perpX) + (boxH / 2) * Math.abs(perpY);
+			const offsetDist = fixedGap + boxHalfExtentInPerp;
+			let boxCenterX = midX + perpX * offsetDist;
+			let boxCenterY = midY + perpY * offsetDist;
+			let boxLeft = boxCenterX - boxW / 2;
+			let boxTop = boxCenterY - boxH / 2;
+			if (boxLeft < 4) boxLeft = 4;
+			if (boxLeft + boxW > plotW - 4) boxLeft = plotW - boxW - 4;
+			if (boxTop < 4) boxTop = 4;
+			if (boxTop + boxH > plotH - 4) boxTop = plotH - boxH - 4;
+			ctx.fillStyle = 'rgba(100, 116, 139, 0.92)';
+			ctx.strokeStyle = 'rgba(71, 85, 105, 0.9)';
+			ctx.lineWidth = 1;
+			ctx.beginPath();
+			drawRoundedRect(ctx, boxLeft, boxTop, boxW, boxH, 8);
+			ctx.fill();
+			ctx.stroke();
+			ctx.fillStyle = '#ffffff';
+			ctx.textAlign = 'left';
+			ctx.textBaseline = 'middle';
+			const textX = boxLeft + boxPad + iconSize + iconGap;
+			const iconCenterX = boxLeft + boxPad + iconSize / 2;
+			// Helper to draw icon and text for each row
+			const drawRow = (rowIndex: number, text: string, drawIcon: (cx: number, cy: number) => void) => {
+				const cy = boxTop + boxPad + lineSpacing * rowIndex + lineHeight / 2;
+				ctx.save();
+				ctx.strokeStyle = '#ffffff';
+				ctx.lineWidth = 1.5;
+				ctx.lineCap = 'round';
+				drawIcon(iconCenterX, cy);
+				ctx.restore();
+				ctx.fillText(text, textX, cy);
+			};
+			// Row 0: vertical height icon (vertical bar with end caps)
+			drawRow(0, line1, (cx, cy) => {
+				ctx.beginPath();
+				ctx.moveTo(cx, cy - 6);
+				ctx.lineTo(cx, cy + 6);
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.moveTo(cx - 2.5, cy - 6);
+				ctx.lineTo(cx + 2.5, cy - 6);
+				ctx.moveTo(cx - 2.5, cy + 6);
+				ctx.lineTo(cx + 2.5, cy + 6);
+				ctx.stroke();
+			});
+			// Row 1: horizontal distance icon (horizontal line with end caps)
+			drawRow(1, line2, (cx, cy) => {
+				ctx.beginPath();
+				ctx.moveTo(cx - 6, cy);
+				ctx.lineTo(cx + 6, cy);
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.moveTo(cx - 6, cy - 2.5);
+				ctx.lineTo(cx - 6, cy + 2.5);
+				ctx.moveTo(cx + 6, cy - 2.5);
+				ctx.lineTo(cx + 6, cy + 2.5);
+				ctx.stroke();
+			});
+			// Row 2: angle icon (two lines forming an angle)
+			drawRow(2, line3, (cx, cy) => {
+				ctx.beginPath();
+				ctx.moveTo(cx - 5, cy + 5);
+				ctx.lineTo(cx, cy - 5);
+				ctx.lineTo(cx + 6, cy + 4);
+				ctx.stroke();
+			});
+
+			// 4. Optional label centered on the line (on the segment)
+			if (drawing.label && drawing.label.trim()) {
+				ctx.save();
+				ctx.font = '12px system-ui, sans-serif';
+				ctx.fillStyle = drawing.style?.color || '#3b82f6';
+				ctx.strokeStyle = '#ffffff';
+				ctx.lineWidth = 2.5;
+				ctx.textAlign = 'center';
+				ctx.textBaseline = 'middle';
+				ctx.strokeText(drawing.label.trim(), midX, midY);
+				ctx.fillText(drawing.label.trim(), midX, midY);
+				ctx.restore();
+			}
+
+			// 5. Bubbles when selected/hovered
+			if (shouldShowBubbles) {
+				const r = 5;
+				ctx.fillStyle = '#ffffff';
+				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
+				ctx.lineWidth = Math.max(1.5, (drawing.style?.width || 2) * 0.6);
+				const hoveredHandle = hoveredLineHandleIdRef.current;
+				const isStartHovered = hoveredHandle === `${drawing.id}:start`;
+				const isEndHovered = hoveredHandle === `${drawing.id}:end`;
+				ctx.save();
+				if (isStartHovered) { ctx.shadowColor = 'rgba(59, 130, 246, 0.9)'; ctx.shadowBlur = 8; }
+				ctx.beginPath();
+				ctx.arc(start.x, start.y, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.restore();
+				ctx.save();
+				if (isEndHovered) { ctx.shadowColor = 'rgba(59, 130, 246, 0.9)'; ctx.shadowBlur = 8; }
+				ctx.beginPath();
+				ctx.arc(end.x, end.y, r, 0, 2 * Math.PI);
+				ctx.fill();
+				ctx.stroke();
+				ctx.restore();
+			}
 			ctx.restore();
 			ctx.restore();
 			return;
