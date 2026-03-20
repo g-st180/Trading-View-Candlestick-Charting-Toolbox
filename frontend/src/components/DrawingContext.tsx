@@ -1,114 +1,131 @@
+/**
+ * =============================================================================
+ * DRAWING CONTEXT — Global state management for the chart drawing system
+ * =============================================================================
+ *
+ * Provides a React context that holds all drawing-related state:
+ *   - Active tool selection
+ *   - Drawing collection (CRUD operations)
+ *   - Hover and selection states for every drawing type
+ *   - In-progress drawing state
+ *
+ * The context is consumed by:
+ *   - CandlestickChart.tsx  — tool placement, hit-testing, drag logic
+ *   - DrawingOverlay.tsx    — rendering drawings on the canvas overlay
+ *   - LeftToolbar.tsx       — tool selection UI
+ *   - FullscreenChart.tsx   — wraps everything in <DrawingProvider>
+ *
+ * RE-EXPORTS: Types are defined in `types/drawing.ts` and re-exported here
+ * for backward compatibility, so existing imports continue to work.
+ */
 import { createContext, useContext, useState, useRef, ReactNode } from 'react';
 
-export type DrawingTool = 'lines' | 'ray' | 'trendline' | 'info-line' | 'horizontal-line' | 'horizontal-ray' | 'parallel-channel' | 'long-position' | 'short-position' | 'price-range' | 'date-range' | 'date-price-range' | 'fib' | 'fibonacci-retracement' | 'gann-box' | 'brush' | 'rectangle' | 'path' | 'circle' | 'curve' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'text' | 'emoji' | 'zoom' | null;
+// Re-export shared types so existing imports from './DrawingContext' still work
+export type { DrawingTool, ChartPoint, ScreenPoint, Drawing, CandleBar } from '../types/drawing';
+import type { DrawingTool, Drawing } from '../types/drawing';
 
-// Chart coordinates (time, price) - these stay constant regardless of zoom/pan
-export interface ChartPoint {
-	time: number; // UTC timestamp
-	price: number;
-}
-
-// Screen coordinates (x, y) - for temporary rendering / MVP drawing
-export interface ScreenPoint {
-	x: number;
-	y: number;
-}
-
-export interface Drawing {
-	id: string;
-	type: DrawingTool;
-	// For now we support screen-space drawing so you can "draw something" reliably.
-	// Later we'll migrate lines/tools to chart-space (ChartPoint) for pan/zoom persistence.
-	screenPoints?: ScreenPoint[];
-	points?: ChartPoint[];
-	// For long-position (RR box)
-	entryPrice?: number;
-	stopLoss?: number;
-	takeProfit?: number;
-	startTime?: number;
-	endTime?: number;
-	style?: {
-		color?: string;
-		width?: number;
-	};
-	hidden?: boolean;
-	locked?: boolean;
-	// For RR ratio label positioning (hysteresis)
-	lastRRSide?: 'green' | 'red'; // Track which side the label was last on
-	// For price-range (vertical measurer; uses startTime above)
-	startPrice?: number;
-	endPrice?: number;
-	// For emoji: character to display; box from (startTime, startPrice) to (endTime, endPrice)
-	emojiChar?: string;
-	// For info-line: optional text label shown center-aligned on the line
-	label?: string;
-}
+// ─── Context Shape ──────────────────────────────────────────────────────────
 
 interface DrawingContextType {
+	/** Currently active drawing tool (null = navigation mode / crosshair) */
 	activeTool: DrawingTool;
-	/** Ref updated synchronously when setActiveTool is called so chart handlers see the new tool immediately */
+	/** Mutable ref that updates synchronously when setActiveTool is called,
+	 *  so pointer event handlers always see the latest tool without stale closure issues */
 	activeToolRef: React.MutableRefObject<DrawingTool>;
 	setActiveTool: (tool: DrawingTool) => void;
+
+	/** All committed drawings on the chart */
 	drawings: Drawing[];
 	addDrawing: (drawing: Drawing) => void;
 	updateDrawing: (id: string, updater: (prev: Drawing) => Drawing) => void;
 	removeDrawing: (id: string) => void;
 	clearDrawings: () => void;
+
+	/** Whether the user is currently placing a drawing (first click done, awaiting completion) */
 	isDrawing: boolean;
 	setIsDrawing: (drawing: boolean) => void;
+
+	/** The in-progress drawing being previewed before it's committed */
 	currentDrawing: Drawing | null;
 	setCurrentDrawing: (drawing: Drawing | null) => void;
+
+	// ── Horizontal Line hover/selection ──
 	hoveredHorizontalLineId: string | null;
 	setHoveredHorizontalLineId: (id: string | null) => void;
 	hoveredHorizontalLineHandleId: string | null;
 	setHoveredHorizontalLineHandleId: (id: string | null) => void;
-	selectedDrawingId: string | null;
-	setSelectedDrawingId: (id: string | null) => void;
 	selectedHorizontalLineId: string | null;
 	setSelectedHorizontalLineId: (id: string | null) => void;
-	// Horizontal Ray tool hover/selection (similar to horizontal line)
+
+	// ── Horizontal Ray hover/selection ──
 	hoveredHorizontalRayId: string | null;
 	setHoveredHorizontalRayId: (id: string | null) => void;
 	hoveredHorizontalRayHandleId: string | null;
 	setHoveredHorizontalRayHandleId: (id: string | null) => void;
 	selectedHorizontalRayId: string | null;
 	setSelectedHorizontalRayId: (id: string | null) => void;
-	// Lines tool hover/selection (generic pattern for future tools)
+
+	// ── Generic line/shape hover/selection (covers lines, ray, info-line, arrows, etc.) ──
 	hoveredLineId: string | null;
 	setHoveredLineId: (id: string | null) => void;
 	hoveredLineHandleId: string | null;
 	setHoveredLineHandleId: (id: string | null) => void;
 	selectedLineId: string | null;
 	setSelectedLineId: (id: string | null) => void;
-	// Emoji tool: currently selected emoji character for placement
+
+	/** Global "selected drawing" ID — the one affected by lock/hide/delete actions */
+	selectedDrawingId: string | null;
+	setSelectedDrawingId: (id: string | null) => void;
+
+	/** Currently selected emoji character for the emoji placement tool */
 	selectedEmoji: string | null;
 	setSelectedEmoji: (emoji: string | null) => void;
 }
 
+// ─── Context & Provider ─────────────────────────────────────────────────────
+
 const DrawingContext = createContext<DrawingContextType | undefined>(undefined);
 
+/**
+ * Wraps the chart area and provides drawing state to all child components.
+ * Should be placed above CandlestickChart, DrawingOverlay, and LeftToolbar in the tree.
+ */
 export function DrawingProvider({ children }: { children: ReactNode }) {
+	// Active tool with synchronous ref for pointer event handlers
 	const [activeTool, setActiveToolState] = useState<DrawingTool>(null);
 	const activeToolRef = useRef<DrawingTool>(null);
 	const setActiveTool = (tool: DrawingTool) => {
 		activeToolRef.current = tool;
 		setActiveToolState(tool);
 	};
+
+	// Drawing collection
 	const [drawings, setDrawings] = useState<Drawing[]>([]);
 	const [isDrawing, setIsDrawing] = useState(false);
 	const [currentDrawing, setCurrentDrawing] = useState<Drawing | null>(null);
+
+	// Horizontal line interaction state
 	const [hoveredHorizontalLineId, setHoveredHorizontalLineId] = useState<string | null>(null);
 	const [hoveredHorizontalLineHandleId, setHoveredHorizontalLineHandleId] = useState<string | null>(null);
-	const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
 	const [selectedHorizontalLineId, setSelectedHorizontalLineId] = useState<string | null>(null);
+
+	// Global drawing selection
+	const [selectedDrawingId, setSelectedDrawingId] = useState<string | null>(null);
+
+	// Horizontal ray interaction state
 	const [hoveredHorizontalRayId, setHoveredHorizontalRayId] = useState<string | null>(null);
 	const [hoveredHorizontalRayHandleId, setHoveredHorizontalRayHandleId] = useState<string | null>(null);
 	const [selectedHorizontalRayId, setSelectedHorizontalRayId] = useState<string | null>(null);
+
+	// Generic line/shape interaction state
 	const [hoveredLineId, setHoveredLineId] = useState<string | null>(null);
 	const [hoveredLineHandleId, setHoveredLineHandleId] = useState<string | null>(null);
 	const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+
+	// Emoji tool state
 	const [selectedEmoji, setSelectedEmoji] = useState<string | null>(null);
 
+	// ── Drawing CRUD ──
 	const addDrawing = (drawing: Drawing) => {
 		setDrawings((prev) => [...prev, drawing]);
 	};
@@ -169,6 +186,10 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
 	);
 }
 
+/**
+ * Hook to access drawing context. Must be used within a <DrawingProvider>.
+ * Throws a descriptive error if used outside the provider tree.
+ */
 export function useDrawing() {
 	const context = useContext(DrawingContext);
 	if (context === undefined) {

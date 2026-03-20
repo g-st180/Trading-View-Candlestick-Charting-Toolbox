@@ -1,6 +1,18 @@
 /**
- * Series primitive that draws RR box and parallel channel behind candles but above grid
- * by using drawBackground with zOrder 'normal'.
+ * =============================================================================
+ * DRAWINGS UNDERLAY PRIMITIVE — Renders drawings below candles, above grid
+ * =============================================================================
+ *
+ * This is a lightweight-charts ISeriesPrimitive that draws certain drawing types
+ * (RR boxes, parallel channels, price/date ranges, fibonacci, gann box, lines)
+ * in the "background" layer of the chart — visually above the grid lines but
+ * behind the candlestick bodies.
+ *
+ * This layering creates the professional look where drawings don't obscure
+ * candle data. The overlay (DrawingOverlay.tsx) then draws handles, labels,
+ * and interactive elements on top of everything.
+ *
+ * Uses drawBackground with zOrder 'normal' to achieve the correct render order.
  */
 import type {
 	ISeriesPrimitive,
@@ -8,15 +20,17 @@ import type {
 	ISeriesPrimitivePaneRenderer,
 	SeriesPrimitivePaneViewZOrder,
 } from 'lightweight-charts';
-import type { Drawing } from './DrawingContext';
+import type { Drawing } from '../types/drawing';
+import type { CandleBar } from '../types/drawing';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 
-export type CandleBar = { time: number; open: number; high: number; low: number; close: number; volume?: number };
+export type { CandleBar };
 
 export interface UnderlayDataRef {
 	current: {
 		drawings: Drawing[];
 		candlestickData: CandleBar[];
+		inProgressIds: Set<string>;
 	};
 }
 
@@ -60,6 +74,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		return this._view ? [this._view] : [];
 	}
 
+	/** Renders all eligible underlay drawings (RR boxes, channels, ranges, fib, gann, lines) into the background canvas layer. */
 	private _drawBackground(target: { useMediaCoordinateSpace: (f: (scope: { context: CanvasRenderingContext2D; mediaSize: { width: number; height: number } }) => void) => void }): void {
 		const chart = this._chart;
 		const series = this._series;
@@ -120,6 +135,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		});
 	}
 
+	/** Draws a long-position RR box with risk/reward zones, entry line, and dotted outcome path. */
 	private _drawLongPosition(
 		ctx: CanvasRenderingContext2D,
 		chart: IChartApi,
@@ -249,6 +265,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		}
 	}
 
+	/** Draws a short-position RR box with inverted risk/reward zones, entry line, and dotted outcome path. */
 	private _drawShortPosition(
 		ctx: CanvasRenderingContext2D,
 		chart: IChartApi,
@@ -375,6 +392,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		}
 	}
 
+	/** Draws a parallel channel with filled region, border lines, and dashed midline. */
 	private _drawParallelChannel(
 		ctx: CanvasRenderingContext2D,
 		chart: IChartApi,
@@ -449,6 +467,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		}
 	}
 
+	/** Draws a price-range measurement box with horizontal borders and a vertical arrow. */
 	private _drawPriceRange(
 		ctx: CanvasRenderingContext2D,
 		chart: IChartApi,
@@ -530,6 +549,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		}
 	}
 
+	/** Draws a date-range measurement box with vertical borders and a horizontal arrow. */
 	private _drawDateRange(
 		ctx: CanvasRenderingContext2D,
 		chart: IChartApi,
@@ -610,6 +630,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		}
 	}
 
+	/** Draws a combined date+price range box with both vertical and horizontal arrows. */
 	private _drawDatePriceRange(
 		ctx: CanvasRenderingContext2D,
 		chart: IChartApi,
@@ -714,6 +735,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		}
 	}
 
+	/** Draws fibonacci retracement with colored bands for each level, extension zones, and a diagonal trend line. */
 	private _drawFibRetracement(
 		ctx: CanvasRenderingContext2D,
 		chart: IChartApi,
@@ -834,6 +856,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		return `hsl(${hues[side]}, 55%, 38%)`;
 	}
 
+	/** Draws a Gann box with a 6×6 colored grid, division lines, colored borders, and fraction labels on all sides. */
 	private _drawGannBox(
 		ctx: CanvasRenderingContext2D,
 		chart: IChartApi,
@@ -952,6 +975,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		ctx.restore();
 	}
 
+	/** Draws a simple line segment between two points. */
 	private _drawLineSegment(
 		ctx: CanvasRenderingContext2D,
 		chart: IChartApi,
@@ -983,6 +1007,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		ctx.restore();
 	}
 
+	/** Draws a ray from the first point through the second, extending to the edge of the visible area. */
 	private _drawRay(
 		ctx: CanvasRenderingContext2D,
 		chart: IChartApi,
@@ -1050,6 +1075,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		ctx.restore();
 	}
 
+	/** Draws a horizontal line spanning the full chart width at the given price level. */
 	private _drawHorizontalLine(
 		ctx: CanvasRenderingContext2D,
 		_chart: IChartApi,
@@ -1074,6 +1100,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		ctx.restore();
 	}
 
+	/** Draws a horizontal ray from the anchor point rightward to the edge of the chart. */
 	private _drawHorizontalRay(
 		ctx: CanvasRenderingContext2D,
 		chart: IChartApi,

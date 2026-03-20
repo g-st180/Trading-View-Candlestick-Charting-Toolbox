@@ -1,3 +1,25 @@
+/**
+ * =============================================================================
+ * LEFT TOOLBAR — Drawing tool selection sidebar
+ * =============================================================================
+ *
+ * Renders the vertical toolbar on the left side of the chart with tool icons
+ * organized into groups: top tools (crosshair, lines, projection, shapes, etc.),
+ * mid tools (ruler, zoom), and bottom tools (lock, visibility, delete).
+ *
+ * Each tool button can open a flyout dropdown menu with sub-tools.
+ * The toolbar syncs with DrawingContext to reflect the currently active tool
+ * and automatically returns to crosshair mode when a tool finishes.
+ *
+ * Tool categories and their sub-tools:
+ *   - Crosshair: cross, arrow, demonstration, eraser
+ *   - Lines: trend line, info line, ray, horizontal line/ray, parallel channel
+ *   - Projection: long position, short position, price/date/date-price range
+ *   - Shapes: brush, arrows (4 types), rectangle, path, circle, curve
+ *   - Fibonacci: fibonacci retracement, gann box
+ *   - Text, Emoji (with picker), Ruler (date-price-range shortcut), Zoom
+ *   - Bottom: lock, eye (visibility), trash (delete selected)
+ */
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
@@ -35,6 +57,8 @@ function Icon({
 		</svg>
 	);
 }
+
+// ── Tool Button Definitions ──
 
 const topTools: ToolButton[] = [
 	{
@@ -207,6 +231,8 @@ interface LeftToolbarProps {
 	onCrosshairTypeChange: (type: string) => void;
 }
 
+// ── Component ──
+
 export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChange }: LeftToolbarProps) {
 	const toolbarRef = useRef<HTMLElement | null>(null);
 	const [activeToolId, setActiveToolId] = useState<string>('crosshair');
@@ -228,6 +254,8 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		useDrawing();
 
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+	// ── Menu State Management ──
 
 	const closeAllMenus = () => {
 		setShowCrosshairMenu(false);
@@ -281,6 +309,8 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		}
 	}, [activeTool]);
 
+	// ── Menu Item Definitions ──
+
 	const crosshairMenuItems = [
 		{ id: 'cross', label: 'Cross', icon: 'cross' },
 		{ id: 'arrow', label: 'Arrow', icon: 'arrow' },
@@ -331,8 +361,10 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		{ id: 'gann-box', label: 'Gann box', icon: 'gann-box' },
 	];
 
+	// ── Button Renderer ──
+
 	const renderButton = (tool: ToolButton) => {
-		// Bottom actions: lock / eye / trash operate on selected drawing
+		// Bottom action buttons: lock, visibility toggle, and delete for the selected drawing
 		if (tool.id === 'trash' || tool.id === 'eye' || tool.id === 'lock') {
 		const selected = selectedDrawingId ? drawings.find((d) => d.id === selectedDrawingId) : null;
 			const isDisabled = !selected;
@@ -396,6 +428,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			);
 		}
 
+		// Crosshair button with flyout for cross, arrow, demonstration, eraser
 		if (tool.id === 'crosshair') {
 			return (
 				<div
@@ -516,6 +549,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			);
 		}
 
+		// Projection button with flyout for long/short position and measurer tools
 		if (tool.id === 'projection') {
 			return (
 				<div key={tool.id} className="relative">
@@ -732,6 +766,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			);
 		}
 
+		// Fibonacci button with flyout for fibonacci retracement and gann box
 		if (tool.id === 'fibonacci') {
 			return (
 				<div key={tool.id} className="relative">
@@ -827,6 +862,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			);
 		}
 
+		// Shapes button with flyout for brushes, arrows, and geometric shapes
 		if (tool.id === 'shapes') {
 			return (
 				<div key={tool.id} className="relative">
@@ -1088,6 +1124,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			);
 		}
 
+		// Lines button with flyout for trend line, ray, horizontal line/ray, and channels
 		if (tool.id === 'lines') {
 			return (
 				<div key={tool.id} className="relative">
@@ -1290,6 +1327,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			);
 		}
 
+		// Emoji button with inline emoji picker popover
 		if (tool.id === 'emoji') {
 			return (
 				<div key={tool.id} className="relative">
@@ -1387,6 +1425,8 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			</button>
 		);
 	};
+
+	// ── Toolbar Layout ──
 
 	return (
 		<aside

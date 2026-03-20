@@ -1,3 +1,8 @@
+/**
+ * FullscreenChart — The main (and only) page of the application.
+ * Wraps the chart and toolbar in DrawingProvider for shared state,
+ * then renders LeftToolbar alongside CandlestickChart in a flex layout.
+ */
 import { useState } from 'react';
 import CandlestickChart from '../CandlestickChart';
 import LeftToolbar from '../components/LeftToolbar';

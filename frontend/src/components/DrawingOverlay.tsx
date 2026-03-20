@@ -1,109 +1,43 @@
+/**
+ * =============================================================================
+ * DRAWING OVERLAY — Canvas-based rendering layer for all chart drawings
+ * =============================================================================
+ *
+ * This component renders an HTML5 canvas overlay on top of the lightweight-charts
+ * instance. It draws all visual elements that aren't handled by the underlay
+ * primitive (DrawingsUnderlayPrimitive.ts), including:
+ *
+ *   - Drawing handles (bubbles, squares) for selection and repositioning
+ *   - Labels, text annotations, and info boxes
+ *   - In-progress drawing previews (current tool placement)
+ *   - Shapes: brush strokes, arrows, emoji boxes, circles, paths, curves
+ *   - Zoom selection rectangle
+ *
+ * The overlay redraws on every animation frame when drawings change, the chart
+ * is panned/zoomed, or pointer events occur. It uses requestAnimationFrame for
+ * smooth, jank-free rendering.
+ *
+ * Architecture:
+ *   - chartToScreen() converts chart-space (time, price) to screen pixels
+ *   - drawDrawing() dispatches to type-specific rendering based on drawing.type
+ *   - The canvas sits above the chart with pointer-events: none
+ *   - All interaction (hover, click, drag) is handled by CandlestickChart.tsx
+ */
+
 import { useEffect, useRef } from 'react';
-import { useDrawing, Drawing, ChartPoint } from './DrawingContext';
+import { useDrawing } from './DrawingContext';
+import type { Drawing, ChartPoint, CandleBar } from '../types/drawing';
 import { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
+import {
+	GANN_FRACTIONS,
+	gannCellColor,
+	gannLabelColor,
+	gannBorderColor,
+	strokeSmoothCurve,
+	drawRoundedRect,
+} from '../utils/drawingHelpers';
 
-export type CandleBar = { time: number; open: number; high: number; low: number; close: number; volume?: number };
-
-/** Gann box grid: divisions 0, 0.25, 0.382, 0.5, 0.618, 0.75, 1 on all sides → 6×6 cells. Yellow–green palette. */
-const GANN_FRACTIONS = [0, 0.25, 0.382, 0.5, 0.618, 0.75, 1] as const;
-function gannCellColor(row: number, col: number, opacity: number): string {
-	const idx = row * 6 + col;
-	const hue = 45 + (idx / 36) * 75;
-	return `hsla(${hue}, 58%, 72%, ${opacity})`;
-}
-function gannLabelColor(index: number): string {
-	const hue = 45 + (index / 6) * 75;
-	return `hsl(${hue}, 52%, 32%)`;
-}
-function gannBorderColor(side: 'top' | 'right' | 'bottom' | 'left'): string {
-	const hues = { top: 52, right: 75, bottom: 98, left: 118 };
-	return `hsl(${hues[side]}, 55%, 38%)`;
-}
-
-/** Smooth points with a moving average to round off candle-to-candle steps */
-function smoothPoints(pts: { x: number; y: number }[], radius: number): { x: number; y: number }[] {
-	if (pts.length <= 2) return pts;
-	const out: { x: number; y: number }[] = [];
-	for (let i = 0; i < pts.length; i++) {
-		let sumX = 0, sumY = 0, count = 0;
-		for (let j = Math.max(0, i - radius); j <= Math.min(pts.length - 1, i + radius); j++) {
-			sumX += pts[j].x;
-			sumY += pts[j].y;
-			count++;
-		}
-		out.push({ x: sumX / count, y: sumY / count });
-	}
-	return out;
-}
-
-/** Segment is "straight horizontal" if dy is small relative to dx */
-function isHorizontal(dx: number, dy: number, slopeMax: number): boolean {
-	const d = Math.abs(dx) + 1e-6;
-	return Math.abs(dy) <= slopeMax * d;
-}
-/** Segment is "straight vertical" if dx is small relative to dy */
-function isVertical(dx: number, dy: number, slopeMax: number): boolean {
-	const d = Math.abs(dy) + 1e-6;
-	return Math.abs(dx) <= slopeMax * d;
-}
-
-/** Draw curve from current position through points (ctx already at points[0]); used for turn arcs */
-function drawCurveThrough(ctx: CanvasRenderingContext2D, points: { x: number; y: number }[], tension: number): void {
-	if (points.length < 2) return;
-	if (points.length === 2) {
-		ctx.lineTo(points[1].x, points[1].y);
-		return;
-	}
-	const n = points.length;
-	for (let i = 1; i < n; i++) {
-		const p0 = points[Math.max(0, i - 2)];
-		const p1 = points[i - 1];
-		const p2 = points[i];
-		const p3 = points[Math.min(n - 1, i + 1)];
-		const cp1x = p1.x + (p2.x - p0.x) * tension;
-		const cp1y = p1.y + (p2.y - p0.y) * tension;
-		const cp2x = p2.x - (p3.x - p1.x) * tension;
-		const cp2y = p2.y - (p3.y - p1.y) * tension;
-		ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-	}
-}
-
-/** Brush: straight horizontal, straight vertical, and curvy only at turns. Turns drawn with round curve. */
-function strokeSmoothCurve(ctx: CanvasRenderingContext2D, pts: { x: number; y: number }[]): void {
-	if (pts.length < 2) return;
-	const radius = 4;
-	const smoothed = pts.length > 5 ? smoothPoints(smoothPoints(pts, radius), radius) : pts.length > 3 ? smoothPoints(pts, radius) : pts;
-	if (smoothed.length < 2) return;
-	const slopeMax = 0.5;
-	const n = smoothed.length;
-	ctx.moveTo(smoothed[0].x, smoothed[0].y);
-	if (n === 2) {
-		ctx.lineTo(smoothed[1].x, smoothed[1].y);
-		return;
-	}
-	let i = 1;
-	while (i < n) {
-		const dx = smoothed[i].x - smoothed[i - 1].x;
-		const dy = smoothed[i].y - smoothed[i - 1].y;
-		const straight = isHorizontal(dx, dy, slopeMax) || isVertical(dx, dy, slopeMax);
-		if (straight) {
-			ctx.lineTo(smoothed[i].x, smoothed[i].y);
-			i++;
-			continue;
-		}
-		const turnStart = i - 1;
-		let j = i;
-		while (j < n - 1) {
-			const ndx = smoothed[j + 1].x - smoothed[j].x;
-			const ndy = smoothed[j + 1].y - smoothed[j].y;
-			if (isHorizontal(ndx, ndy, slopeMax) || isVertical(ndx, ndy, slopeMax)) break;
-			j++;
-		}
-		const turnPts = smoothed.slice(turnStart, j + 1);
-		drawCurveThrough(ctx, turnPts, 0.65);
-		i = j + 1;
-	}
-}
+export type { CandleBar } from '../types/drawing';
 
 export interface DrawingOverlayProps {
 	chart: IChartApi | null;
@@ -337,33 +271,6 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 		};
 	}, [chart, series, containerRef]);
 
-	// Helper function to draw rounded rectangle (for browser compatibility)
-	const drawRoundedRect = (
-		ctx: CanvasRenderingContext2D,
-		x: number,
-		y: number,
-		width: number,
-		height: number,
-		radius: number
-	) => {
-		if (ctx.roundRect) {
-			ctx.roundRect(x, y, width, height, radius);
-		} else {
-			// Fallback for browsers without roundRect support
-			ctx.beginPath();
-			ctx.moveTo(x + radius, y);
-			ctx.lineTo(x + width - radius, y);
-			ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-			ctx.lineTo(x + width, y + height - radius);
-			ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-			ctx.lineTo(x + radius, y + height);
-			ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-			ctx.lineTo(x, y + radius);
-			ctx.quadraticCurveTo(x, y, x + radius, y);
-			ctx.closePath();
-		}
-	};
-
 	const drawDrawing = (
 		ctx: CanvasRenderingContext2D,
 		drawing: Drawing,
@@ -377,6 +284,43 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				? Number((chart.priceScale('right') as any).width())
 				: 0;
 		const plotWidth = Math.max(0, Math.floor(container.getBoundingClientRect().width - rightScaleWidth));
+
+		/** Draws a white handle circle at the given position. */
+		const drawHandle = (hx: number, hy: number, r = 5, fill = '#ffffff', stroke = '#000000') => {
+			ctx.fillStyle = fill;
+			ctx.strokeStyle = stroke;
+			ctx.lineWidth = 1.5;
+			ctx.beginPath();
+			ctx.arc(hx, hy, r, 0, 2 * Math.PI);
+			ctx.fill();
+			ctx.stroke();
+		};
+
+		/** Draws a white rounded info block with centered text lines. */
+		const drawInfoBlock = (cx: number, top: number, lines: string[], pad = 6, radius = 4) => {
+			ctx.font = '12px sans-serif';
+			const lineH = 14;
+			const maxW = Math.max(...lines.map(l => ctx.measureText(l).width));
+			const bw = maxW + pad * 2;
+			const bh = lineH * lines.length + pad * 2;
+			const bx = cx - bw / 2;
+			ctx.fillStyle = '#ffffff';
+			ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+			ctx.lineWidth = 1;
+			ctx.beginPath();
+			drawRoundedRect(ctx, bx, top, bw, bh, radius);
+			ctx.fill();
+			ctx.stroke();
+			ctx.fillStyle = '#1e293b';
+			ctx.textAlign = 'center';
+			ctx.textBaseline = 'middle';
+			lines.forEach((line, i) => {
+				ctx.fillText(line, cx, top + pad + lineH * (i + 0.5));
+			});
+		};
+
+		/** Whether this drawing's handles should currently be visible. */
+		const isInteractive = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
 
 		// ============================================================================
 		// LONG / SHORT POSITION (RR BOX) RENDERING
@@ -876,44 +820,11 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				}
 			}
 
-			// White rectangular info block at center-bottom of rect
-			const padding = 6;
-			ctx.font = '12px sans-serif';
-			const textWidth = ctx.measureText(labelText).width;
-			const textHeight = 14;
-			const rectW = textWidth + padding * 2;
-			const rectH = textHeight + padding * 2;
-			const blockX = (minX + maxX) / 2 - rectW / 2;
-			const blockY = maxY + 8;
-			ctx.fillStyle = '#ffffff';
-			ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-			ctx.lineWidth = 1;
-			ctx.beginPath();
-			drawRoundedRect(ctx, blockX, blockY, rectW, rectH, 4);
-			ctx.fill();
-			ctx.stroke();
-			ctx.fillStyle = '#1e293b';
-			ctx.textAlign = 'center';
-			ctx.textBaseline = 'middle';
-			ctx.fillText(labelText, (minX + maxX) / 2, blockY + rectH / 2);
+			drawInfoBlock((minX + maxX) / 2, maxY + 8, [labelText]);
 
-			// Two white reposition dots: at start and end points (free handles, no min/max swap)
-			const shouldShowHandles = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
-			if (shouldShowHandles) {
-				const r = 5;
-				ctx.fillStyle = '#ffffff';
-				ctx.strokeStyle = '#000000';
-				ctx.lineWidth = 1.5;
-				// Start point (first click)
-				ctx.beginPath();
-				ctx.arc(Number(startX), startY, r, 0, 2 * Math.PI);
-				ctx.fill();
-				ctx.stroke();
-				// End point (second click)
-				ctx.beginPath();
-				ctx.arc(Number(endX), endY, r, 0, 2 * Math.PI);
-				ctx.fill();
-				ctx.stroke();
+			if (isInteractive) {
+				drawHandle(Number(startX), startY);
+				drawHandle(Number(endX), endY);
 			}
 			ctx.restore();
 			return;
@@ -1037,22 +948,9 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			ctx.stroke();
 			ctx.setLineDash([]);
 
-			const shouldShowHandles = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
-			if (shouldShowHandles) {
-				const r = 5;
-				ctx.fillStyle = '#ffffff';
-				ctx.strokeStyle = '#000000';
-				ctx.lineWidth = 1.5;
-				// Left corner of level 1 (first click)
-				ctx.beginPath();
-				ctx.arc(leftX, startY, r, 0, 2 * Math.PI);
-				ctx.fill();
-				ctx.stroke();
-				// Right corner of level 0 (second point)
-				ctx.beginPath();
-				ctx.arc(rightX, endY, r, 0, 2 * Math.PI);
-				ctx.fill();
-				ctx.stroke();
+			if (isInteractive) {
+				drawHandle(leftX, startY);
+				drawHandle(rightX, endY);
 			}
 			ctx.restore();
 			return;
@@ -1174,42 +1072,11 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				}
 			}
 
-			const padding = 6;
-			ctx.font = '12px sans-serif';
-			const line1W = ctx.measureText(barsText).width;
-			const line2W = ctx.measureText(volText).width;
-			const textW = Math.max(line1W, line2W);
-			const rectW = textW + padding * 2;
-			const rectH = 14 * 2 + padding * 2;
-			const blockX = (minX + maxX) / 2 - rectW / 2;
-			const blockY = maxY + 8;
-			ctx.fillStyle = '#ffffff';
-			ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-			ctx.lineWidth = 1;
-			ctx.beginPath();
-			drawRoundedRect(ctx, blockX, blockY, rectW, rectH, 4);
-			ctx.fill();
-			ctx.stroke();
-			ctx.fillStyle = '#1e293b';
-			ctx.textAlign = 'center';
-			ctx.textBaseline = 'middle';
-			ctx.fillText(barsText, (minX + maxX) / 2, blockY + 14);
-			ctx.fillText(volText, (minX + maxX) / 2, blockY + 14 + 14);
+			drawInfoBlock((minX + maxX) / 2, maxY + 8, [barsText, volText]);
 
-			const shouldShowHandles = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
-			if (shouldShowHandles) {
-				const r = 5;
-				ctx.fillStyle = '#ffffff';
-				ctx.strokeStyle = '#000000';
-				ctx.lineWidth = 1.5;
-				ctx.beginPath();
-				ctx.arc(Number(startX), startY, r, 0, 2 * Math.PI);
-				ctx.fill();
-				ctx.stroke();
-				ctx.beginPath();
-				ctx.arc(Number(endX), endY, r, 0, 2 * Math.PI);
-				ctx.fill();
-				ctx.stroke();
+			if (isInteractive) {
+				drawHandle(Number(startX), startY);
+				drawHandle(Number(endX), endY);
 			}
 			ctx.restore();
 			return;
@@ -1354,45 +1221,11 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				}
 			}
 
-			// Combined label block: line1 = price, line2 = bars, line3 = vol
-			const padding = 6;
-			ctx.font = '12px sans-serif';
-			const line1W = ctx.measureText(priceLabelText).width;
-			const line2W = ctx.measureText(barsText).width;
-			const line3W = ctx.measureText(volText).width;
-			const textW = Math.max(line1W, line2W, line3W);
-			const rectW = textW + padding * 2;
-			const rectH = 14 * 3 + padding * 2;
-			const blockX = (minX + maxX) / 2 - rectW / 2;
-			const blockY = maxY + 8;
-			ctx.fillStyle = '#ffffff';
-			ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-			ctx.lineWidth = 1;
-			ctx.beginPath();
-			drawRoundedRect(ctx, blockX, blockY, rectW, rectH, 4);
-			ctx.fill();
-			ctx.stroke();
-			ctx.fillStyle = '#1e293b';
-			ctx.textAlign = 'center';
-			ctx.textBaseline = 'middle';
-			ctx.fillText(priceLabelText, (minX + maxX) / 2, blockY + 14);
-			ctx.fillText(barsText, (minX + maxX) / 2, blockY + 14 + 14);
-			ctx.fillText(volText, (minX + maxX) / 2, blockY + 14 + 14 + 14);
+			drawInfoBlock((minX + maxX) / 2, maxY + 8, [priceLabelText, barsText, volText]);
 
-			const shouldShowHandles = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
-			if (shouldShowHandles) {
-				const r = 5;
-				ctx.fillStyle = '#ffffff';
-				ctx.strokeStyle = '#000000';
-				ctx.lineWidth = 1.5;
-				ctx.beginPath();
-				ctx.arc(Number(startX), startY, r, 0, 2 * Math.PI);
-				ctx.fill();
-				ctx.stroke();
-				ctx.beginPath();
-				ctx.arc(Number(endX), endY, r, 0, 2 * Math.PI);
-				ctx.fill();
-				ctx.stroke();
+			if (isInteractive) {
+				drawHandle(Number(startX), startY);
+				drawHandle(Number(endX), endY);
 			}
 			ctx.restore();
 			return;
@@ -2196,8 +2029,8 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			return;
 		}
 
-		// Arrow Mark Up: single-point, handle before the 2-point guard
-		if (drawing.type === 'arrow-markup' && drawing.points && drawing.points.length >= 1) {
+		// Arrow Mark Up / Arrow Mark Down: single-point directional arrow
+		if ((drawing.type === 'arrow-markup' || drawing.type === 'arrow-markdown') && drawing.points && drawing.points.length >= 1) {
 			const scrPt = chartToScreen(drawing.points[0]);
 			if (scrPt) {
 				const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
@@ -2211,87 +2044,24 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				ctx.rect(0, 0, plotW, container.getBoundingClientRect().height);
 				ctx.clip();
 
-				const color = drawing.style?.color || '#22c55e';
-				const arrowH = 28;
-				const arrowW = 18;
-				const headH = 16;
-				const shaftW = 7;
+				const isUp = drawing.type === 'arrow-markup';
+				const color = drawing.style?.color || (isUp ? '#22c55e' : '#ef4444');
+				const dir = isUp ? -1 : 1;
+				const arrowH = 28, arrowW = 18, headH = 16, shaftW = 7;
 
 				const tipX = scrPt.x;
-				const tipY = scrPt.y - arrowH;
-				const headLeftX = scrPt.x - arrowW / 2;
-				const headRightX = scrPt.x + arrowW / 2;
-				const headBaseY = scrPt.y - arrowH + headH;
-				const shaftLeftX = scrPt.x - shaftW / 2;
-				const shaftRightX = scrPt.x + shaftW / 2;
-				const bottomY = scrPt.y;
+				const tipY = scrPt.y + dir * arrowH;
+				const headBaseY = scrPt.y + dir * (arrowH - headH);
+				const baseY = scrPt.y;
 
 				ctx.beginPath();
 				ctx.moveTo(tipX, tipY);
-				ctx.lineTo(headRightX, headBaseY);
-				ctx.lineTo(shaftRightX, headBaseY);
-				ctx.lineTo(shaftRightX, bottomY);
-				ctx.lineTo(shaftLeftX, bottomY);
-				ctx.lineTo(shaftLeftX, headBaseY);
-				ctx.lineTo(headLeftX, headBaseY);
-				ctx.closePath();
-				ctx.fillStyle = color;
-				ctx.fill();
-
-				if (shouldShowBubbles) {
-					const r = 5;
-					ctx.fillStyle = '#ffffff';
-					ctx.strokeStyle = color;
-					ctx.lineWidth = 1.5;
-					ctx.beginPath();
-					ctx.arc(tipX, tipY, r, 0, Math.PI * 2);
-					ctx.fill();
-					ctx.stroke();
-				}
-
-				ctx.restore();
-			}
-			return;
-		}
-
-		// Arrow Mark Down: single-point, downward red arrow
-		if (drawing.type === 'arrow-markdown' && drawing.points && drawing.points.length >= 1) {
-			const scrPt = chartToScreen(drawing.points[0]);
-			if (scrPt) {
-				const isCurrentDrawing = currentDrawingRef.current?.id === drawing.id;
-				const isHovered = hoveredLineIdRef.current === drawing.id;
-				const isSelected = selectedLineIdRef.current === drawing.id;
-				const shouldShowBubbles = isCurrentDrawing || isHovered || isSelected;
-
-				const plotW = plotWidth || container.getBoundingClientRect().width;
-				ctx.save();
-				ctx.beginPath();
-				ctx.rect(0, 0, plotW, container.getBoundingClientRect().height);
-				ctx.clip();
-
-				const color = drawing.style?.color || '#ef4444';
-				const arrowH = 28;
-				const arrowW = 18;
-				const headH = 16;
-				const shaftW = 7;
-
-				const tipX = scrPt.x;
-				const tipY = scrPt.y + arrowH;
-				const headLeftX = scrPt.x - arrowW / 2;
-				const headRightX = scrPt.x + arrowW / 2;
-				const headBaseY = scrPt.y + arrowH - headH;
-				const shaftLeftX = scrPt.x - shaftW / 2;
-				const shaftRightX = scrPt.x + shaftW / 2;
-				const topY = scrPt.y;
-
-				ctx.beginPath();
-				ctx.moveTo(tipX, tipY);
-				ctx.lineTo(headRightX, headBaseY);
-				ctx.lineTo(shaftRightX, headBaseY);
-				ctx.lineTo(shaftRightX, topY);
-				ctx.lineTo(shaftLeftX, topY);
-				ctx.lineTo(shaftLeftX, headBaseY);
-				ctx.lineTo(headLeftX, headBaseY);
+				ctx.lineTo(scrPt.x + arrowW / 2, headBaseY);
+				ctx.lineTo(scrPt.x + shaftW / 2, headBaseY);
+				ctx.lineTo(scrPt.x + shaftW / 2, baseY);
+				ctx.lineTo(scrPt.x - shaftW / 2, baseY);
+				ctx.lineTo(scrPt.x - shaftW / 2, headBaseY);
+				ctx.lineTo(scrPt.x - arrowW / 2, headBaseY);
 				ctx.closePath();
 				ctx.fillStyle = color;
 				ctx.fill();
@@ -2579,10 +2349,10 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			ctx.lineTo(end.x, end.y);
 			ctx.stroke();
 
-			// 2. Stats for the gray box
+			// 2. Stats for the gray box (left-aligned; + sign and numbers align with other lines)
 			const priceDiff = p1.price - p0.price;
 			const pct = p0.price !== 0 ? (priceDiff / p0.price) * 100 : 0;
-			const line1 = `${priceDiff >= 0 ? '+' : ''}${priceDiff.toFixed(2)} (${pct >= 0 ? '' : ''}${pct.toFixed(2)}%)`;
+			const line1 = (priceDiff >= 0 ? '+' : '') + priceDiff.toFixed(2) + ' (' + pct.toFixed(2) + '%)';
 			const bars = candlestickDataRef?.current ?? [];
 			const minT = Math.min(p0.time as number, p1.time as number);
 			const maxT = Math.max(p0.time as number, p1.time as number);
@@ -2607,7 +2377,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			const lineSpacing = 30;
 			const iconSize = 14;
 			const iconGap = 12;
-			const font = '13px system-ui, sans-serif';
+			const font = '12px "Trebuchet MS", "Roboto", "Segoe UI", system-ui, sans-serif';
 			ctx.font = font;
 			const w1 = ctx.measureText(line1).width;
 			const w2 = ctx.measureText(line2).width;
@@ -2630,8 +2400,8 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			if (boxLeft + boxW > plotW - 4) boxLeft = plotW - boxW - 4;
 			if (boxTop < 4) boxTop = 4;
 			if (boxTop + boxH > plotH - 4) boxTop = plotH - boxH - 4;
-			ctx.fillStyle = 'rgba(100, 116, 139, 0.92)';
-			ctx.strokeStyle = 'rgba(71, 85, 105, 0.9)';
+			ctx.fillStyle = 'rgba(100, 108, 120, 0.88)';
+			ctx.strokeStyle = 'rgba(71, 78, 90, 0.85)';
 			ctx.lineWidth = 1;
 			ctx.beginPath();
 			drawRoundedRect(ctx, boxLeft, boxTop, boxW, boxH, 8);

@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/candlestickchart.tsx","./src/main.tsx","./src/components/drawingcontext.tsx","./src/components/drawingoverlay.tsx","./src/components/drawingsunderlayprimitive.ts","./src/components/lefttoolbar.tsx","./src/components/navigation.tsx","./src/pages/fullscreenchart.tsx","./src/types/drawing.ts","./src/utils/drawinghelpers.ts"],"version":"5.9.3"}

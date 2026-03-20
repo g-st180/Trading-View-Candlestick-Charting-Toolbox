@@ -1,3 +1,8 @@
+/**
+ * App — Root component with routing configuration.
+ * Single route: "/" renders the FullscreenChart page.
+ * All other routes redirect to "/" via catch-all.
+ */
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navigation from './components/Navigation';
 import FullscreenChart from './pages/FullscreenChart';

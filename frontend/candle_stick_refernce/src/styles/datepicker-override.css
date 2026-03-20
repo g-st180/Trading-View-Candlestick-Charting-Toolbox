@@ -1,8 +1,0 @@
-/* Force react-datepicker to appear above all canvas elements */
-.react-datepicker-popper {
-    z-index: 9999 !important;
-}
-
-.react-datepicker {
-    z-index: 9999 !important;
-}
