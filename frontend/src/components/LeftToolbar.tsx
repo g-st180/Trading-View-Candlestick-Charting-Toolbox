@@ -60,15 +60,18 @@ function Icon({
 
 // ── Tool Button Definitions ──
 
+const ICON_SW = 1.05;
+const BUBBLE_SW = 0.95;
+
 const topTools: ToolButton[] = [
 	{
 		id: 'crosshair',
 		label: 'Crosshair',
 		icon: (
-			<Icon className="h-7 w-7" strokeWidth={0.95}>
-				<path d="M12 3v8" />
+			<Icon strokeWidth={ICON_SW}>
+				<path d="M12 3v7" />
 				<path d="M12 14v7" />
-				<path d="M3 12h8" />
+				<path d="M3 12h7" />
 				<path d="M14 12h7" />
 			</Icon>
 		),
@@ -77,10 +80,10 @@ const topTools: ToolButton[] = [
 		id: 'lines',
 		label: 'Trend Line Tools',
 		icon: (
-			<Icon strokeWidth={1.1}>
+			<Icon strokeWidth={ICON_SW}>
 				<path d="M5 19L19 5" />
-				<circle cx="5" cy="19" r="1.5" fill="white" stroke="currentColor" strokeWidth={1} />
-				<circle cx="19" cy="5" r="1.5" fill="white" stroke="currentColor" strokeWidth={1} />
+				<circle cx="5" cy="19" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="19" cy="5" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			</Icon>
 		),
 	},
@@ -88,14 +91,14 @@ const topTools: ToolButton[] = [
 		id: 'fibonacci',
 		label: 'Fib Retracement',
 		icon: (
-			<Icon strokeWidth={1.1}>
+			<Icon strokeWidth={ICON_SW}>
 				<path d="M4 5h16" />
 				<path d="M4 10h16" />
 				<path d="M4 15h16" />
 				<path d="M4 20h16" />
-				<path d="M4 20L20 5" strokeDasharray="3 2" strokeWidth={0.8} />
-				<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={1} />
-				<circle cx="20" cy="5" r="1.5" fill="white" stroke="currentColor" strokeWidth={1} />
+				<path d="M4 20L20 5" strokeDasharray="3 2" strokeWidth={0.75} />
+				<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="20" cy="5" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			</Icon>
 		),
 	},
@@ -103,7 +106,7 @@ const topTools: ToolButton[] = [
 		id: 'shapes',
 		label: 'Shapes & Brushes',
 		icon: (
-			<Icon strokeWidth={1.1}>
+			<Icon strokeWidth={ICON_SW}>
 				<path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
 			</Icon>
 		),
@@ -112,13 +115,13 @@ const topTools: ToolButton[] = [
 		id: 'patterns',
 		label: 'Patterns',
 		icon: (
-			<Icon strokeWidth={1.2}>
+			<Icon strokeWidth={ICON_SW}>
 				<polyline points="3,18 7,8 11,15 15,5 21,16" fill="none" strokeLinejoin="round" strokeLinecap="round" />
-				<circle cx="3" cy="18" r="1.4" fill="white" stroke="currentColor" strokeWidth={1} />
-				<circle cx="7" cy="8" r="1.4" fill="white" stroke="currentColor" strokeWidth={1} />
-				<circle cx="11" cy="15" r="1.4" fill="white" stroke="currentColor" strokeWidth={1} />
-				<circle cx="15" cy="5" r="1.4" fill="white" stroke="currentColor" strokeWidth={1} />
-				<circle cx="21" cy="16" r="1.4" fill="white" stroke="currentColor" strokeWidth={1} />
+				<circle cx="3" cy="18" r="1.4" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="7" cy="8" r="1.4" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="11" cy="15" r="1.4" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="15" cy="5" r="1.4" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="21" cy="16" r="1.4" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			</Icon>
 		),
 	},
@@ -126,11 +129,11 @@ const topTools: ToolButton[] = [
 		id: 'projection',
 		label: 'Forecasting',
 		icon: (
-			<Icon strokeWidth={1.1}>
+			<Icon strokeWidth={ICON_SW}>
 				<rect x="3" y="5" width="18" height="14" rx="1" fill="none" />
-				<path d="M3 12h18" strokeDasharray="2 2" strokeWidth={0.9} />
-				<path d="M3 8.5h18" strokeWidth={0.5} opacity={0.4} />
-				<path d="M3 15.5h18" strokeWidth={0.5} opacity={0.4} />
+				<path d="M3 12h18" strokeDasharray="2 2" strokeWidth={0.85} />
+				<path d="M3 8.5h18" strokeWidth={0.45} opacity={0.4} />
+				<path d="M3 15.5h18" strokeWidth={0.45} opacity={0.4} />
 			</Icon>
 		),
 	},
@@ -138,7 +141,7 @@ const topTools: ToolButton[] = [
 		id: 'annotation',
 		label: 'Text & Notes',
 		icon: (
-			<Icon strokeWidth={1.1}>
+			<Icon strokeWidth={ICON_SW}>
 				<path d="M4 7V4h16v3" />
 				<path d="M12 4v16" />
 				<path d="M8 20h8" />
@@ -149,10 +152,10 @@ const topTools: ToolButton[] = [
 		id: 'emoji',
 		label: 'Emoji',
 		icon: (
-			<Icon strokeWidth={1.1}>
+			<Icon strokeWidth={ICON_SW}>
 				<circle cx="12" cy="12" r="9" />
-				<path d="M9 9h.01" strokeWidth={2} strokeLinecap="round" />
-				<path d="M15 9h.01" strokeWidth={2} strokeLinecap="round" />
+				<path d="M9 9h.01" strokeWidth={1.9} strokeLinecap="round" />
+				<path d="M15 9h.01" strokeWidth={1.9} strokeLinecap="round" />
 				<path d="M8 14s1.5 2 4 2 4-2 4-2" />
 			</Icon>
 		),
@@ -164,7 +167,7 @@ const midTools: ToolButton[] = [
 		id: 'ruler',
 		label: 'Measure',
 		icon: (
-			<Icon strokeWidth={1.1}>
+			<Icon strokeWidth={ICON_SW}>
 				<g transform="rotate(-45, 12, 12)">
 					<rect x="2" y="10" width="20" height="4" rx="0.5" fill="none" />
 					<line x1="5" y1="10" x2="5" y2="12.5" />
@@ -180,7 +183,7 @@ const midTools: ToolButton[] = [
 		id: 'zoom',
 		label: 'Zoom In',
 		icon: (
-			<Icon strokeWidth={1.1}>
+			<Icon strokeWidth={ICON_SW}>
 				<circle cx="11" cy="11" r="7" />
 				<path d="M21 21l-4.35-4.35" />
 				<path d="M11 8v6" />
@@ -195,7 +198,7 @@ const bottomTools: ToolButton[] = [
 		id: 'lock',
 		label: 'Lock',
 		icon: (
-			<Icon>
+			<Icon strokeWidth={ICON_SW}>
 				<rect x="6" y="11" width="12" height="9" rx="2" />
 				<path d="M8 11V9a4 4 0 018 0v2" />
 			</Icon>
@@ -205,7 +208,7 @@ const bottomTools: ToolButton[] = [
 		id: 'eye',
 		label: 'Visibility',
 		icon: (
-			<Icon>
+			<Icon strokeWidth={ICON_SW}>
 				<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
 				<circle cx="12" cy="12" r="2.5" />
 			</Icon>
@@ -215,7 +218,7 @@ const bottomTools: ToolButton[] = [
 		id: 'trash',
 		label: 'Delete',
 		icon: (
-			<Icon>
+			<Icon strokeWidth={ICON_SW}>
 				<path d="M3 6h18" />
 				<path d="M8 6V4h8v2" />
 				<path d="M6 6l1 16h10l1-16" />
