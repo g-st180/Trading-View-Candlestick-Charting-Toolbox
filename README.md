@@ -43,7 +43,7 @@ npm install
 npm run dev
 ```
 
-The app will be available at `http://localhost:5174` (port is set in `frontend/vite.config.ts`).
+The app will be available at `http://localhost:5174`
 
 ---
 
