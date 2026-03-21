@@ -1,10 +1,21 @@
-# 📈 TradingView Clone
+# 📈 Trading View's Candlestick Charting Toolbox
 
-A feature-rich, browser-based charting tool for technical analysis — built with React, TypeScript, and [lightweight-charts](https://github.com/nicehash/lightweight-charts). Ships with 20+ drawing tools, real-time hit-testing, drag-to-resize handles, and a fully custom canvas overlay renderer.
+A browser-based charting tool for technical analysis — built with React, TypeScript, and [lightweight-charts](https://github.com/nicehash/lightweight-charts). Ships with 20+ drawing tools, drag-to-resize handles, and a fully custom canvas overlay renderer.
 
-> Think TradingView's drawing suite, running entirely in your browser with zero backend dependency.
+> A candlestick charting workspace inspired by professional trading platforms — running entirely in your browser with zero backend dependency.
 
-<!-- Add screenshots here -->
+## Screenshots
+
+<p align="center">
+  <img src="./docs/screenshots/767F1E0C-0E2B-4EB1-89A8-252288AA98E6_1_201_a.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — chart view 1" />
+  &nbsp;
+  <img src="./docs/screenshots/5AEA70F1-006E-492A-92F0-C9B18900B5DE_1_201_a.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — chart view 2" />
+</p>
+<p align="center">
+  <img src="./docs/screenshots/BBB5FA03-005D-4E30-B31E-296BFE108D39_1_201_a.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — drawing tools" />
+  &nbsp;
+  <img src="./docs/screenshots/E0FEB9FB-3F9E-4872-B58B-98A0EEDB2230_1_201_a.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — annotations and overlays" />
+</p>
 
 ---
 
@@ -14,19 +25,16 @@ A feature-rich, browser-based charting tool for technical analysis — built wit
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
 - [Drawing Tools](#drawing-tools)
-- [How It Works](#how-it-works)
-- [Key Subsystems](#key-subsystems)
 - [Adding a New Tool](#adding-a-new-tool)
 - [Tech Stack](#tech-stack)
-- [Future Plans](#future-plans)
 
 ---
 
 ## Quick Start
 
 ```bash
-# Clone the repo
-git clone <repo-url> && cd groww_clone
+git clone https://github.com/g-st180/groww_clone.git
+cd groww_clone
 
 # Install frontend dependencies
 cd frontend
@@ -46,31 +54,31 @@ The app will be available at `http://localhost:5173`.
 ┌─────────────────────────────────────────────────────────────────────┐
 │                           Browser                                   │
 │                                                                     │
-│  ┌───────────┐   ┌──────────────────────────────────────────────┐  │
-│  │           │   │              FullscreenChart                  │  │
-│  │   Left    │   │                                              │  │
-│  │  Toolbar  │──▶│  ┌────────────────────────────────────────┐  │  │
-│  │           │   │  │         CandlestickChart               │  │  │
-│  │  (tool    │   │  │                                        │  │  │
-│  │  select,  │   │  │  ┌──────────────┐  ┌───────────────┐  │  │  │
-│  │  colors,  │   │  │  │ lightweight-  │  │   Drawing     │  │  │  │
-│  │  styles)  │   │  │  │ charts       │  │   Overlay     │  │  │  │
-│  │           │   │  │  │ (candles,    │  │   (canvas)    │  │  │  │
-│  └───────────┘   │  │  │  grid, axes) │  │              │  │  │  │
-│                  │  │  └──────┬───────┘  └──────┬────────┘  │  │  │
-│  ┌───────────┐   │  │         │                  │           │  │  │
-│  │ Drawing   │   │  │         ▼                  ▼           │  │  │
-│  │ Context   │◀─▶│  │  ┌─────────────────────────────────┐  │  │  │
-│  │ (state)   │   │  │  │    DrawingsUnderlayPrimitive    │  │  │  │
-│  └───────────┘   │  │  │    (below-candle rendering)     │  │  │  │
-│                  │  │  └─────────────────────────────────┘  │  │  │
-│                  │  └────────────────────────────────────────┘  │  │
-│                  └──────────────────────────────────────────────┘  │
+│  ┌───────────┐   ┌──────────────────────────────────────────────┐   │
+│  │           │   │              FullscreenChart                 │   │
+│  │   Left    │   │                                              │   │
+│  │  Toolbar  │──▶│  ┌────────────────────────────────────────┐  │   │
+│  │           │   │  │         CandlestickChart               │  │   │
+│  │  (tool    │   │  │                                        │  │   │
+│  │  select,  │   │  │  ┌──────────────┐  ┌───────────────┐   │  │   │
+│  │  colors,  │   │  │  │ lightweight- │  │   Drawing     │   │  │   │
+│  │  styles)  │   │  │  │ charts       │  │   Overlay     │   │  │   │
+│  │           │   │  │  │ (candles,    │  │   (canvas)    │   │  │   │
+│  └───────────┘   │  │  │  grid, axes) │  │               │   │  │   │  
+│                  │  │  └──────┬───────┘  └──────┬────────┘   │  │   │
+│  ┌───────────┐   │  │         │                 │            │  │   │
+│  │ Drawing   │   │  │         ▼                 ▼            │  │   │
+│  │ Context   │◀─▶│  │  ┌─────────────────────────────────┐   │  │   │
+│  │ (state)   │   │  │  │    DrawingsUnderlayPrimitive    │   │  │   │
+│  └───────────┘   │  │  │    (below-candle rendering)     │   │  │   │
+│                  │  │  └─────────────────────────────────┘   │  │   │
+│                  │  └────────────────────────────────────────┘  │   │
+│                  └──────────────────────────────────────────────┘   │
 │                                                                     │
-│  ┌──────────────┐  ┌──────────────────┐                            │
-│  │  Navigation  │  │  drawingHelpers  │                            │
-│  │  (top bar)   │  │  (pure utils)    │                            │
-│  └──────────────┘  └──────────────────┘                            │
+│  ┌──────────────┐  ┌──────────────────┐                             │
+│  │  Navigation  │  │  drawingHelpers  │                             │ 
+│  │  (top bar)   │  │  (pure utils)    │                             │
+│  └──────────────┘  └──────────────────┘                             │
 └─────────────────────────────────────────────────────────────────────┘
 
 Data flow:
@@ -91,6 +99,8 @@ Data flow:
 groww_clone/
 ├── README.md
 ├── .gitignore
+├── docs/
+│   └── screenshots/                    # README & docs images
 ├── backend/
 │   ├── main.py                          # FastAPI WebSocket server (future use)
 │   └── requirements.txt
@@ -192,58 +202,6 @@ groww_clone/
 
 ---
 
-## How It Works
-
-The rendering pipeline has three layers that composite together:
-
-```
-  ┌─────────────────────────────────┐
-  │        DrawingOverlay           │  ← topmost: handles, labels, text
-  │        (HTML5 Canvas)           │
-  ├─────────────────────────────────┤
-  │     lightweight-charts          │  ← middle: candles, volume, grid
-  │        (WebGL/Canvas)           │
-  ├─────────────────────────────────┤
-  │   DrawingsUnderlayPrimitive     │  ← bottom: filled shapes, channels
-  │     (ISeriesPrimitive)          │
-  └─────────────────────────────────┘
-```
-
-1. **User selects a tool** from `LeftToolbar` → updates `DrawingContext`.
-2. **Mouse events** on the chart area are captured by `CandlestickChart`, which converts pixel coordinates to `{ time, price }` using the lightweight-charts coordinate API.
-3. **Drawing objects** are stored as typed structs in `DrawingContext` (points, style, tool type).
-4. **Rendering** happens on two layers simultaneously:
-   - `DrawingsUnderlayPrimitive` renders filled regions *below* candles via the `ISeriesPrimitive` plugin API.
-   - `DrawingOverlay` renders lines, handles, labels, and interactive elements on a canvas *above* candles.
-5. **Hit-testing** on mouse move checks proximity to every visible drawing's edges and handles, highlighting the nearest match and changing the cursor.
-6. **Dragging** updates the drawing's anchor points in real-time, re-rendering each frame.
-
----
-
-## Key Subsystems
-
-### Chart Setup
-
-`CandlestickChart.tsx` initializes a `lightweight-charts` instance, feeds it OHLCV data, attaches the underlay primitive, and wires up mouse/keyboard event listeners. All coordinate translation (pixel ↔ price/time) flows through this component.
-
-### Drawing Placement
-
-When a tool is active, click events create anchor points. Single-click tools (horizontal line, markers) complete immediately. Two-click tools (trend line, rectangle) require a start and end point. Multi-click tools (path) accumulate points until double-click or Enter.
-
-### Hit-Testing
-
-On every `mousemove`, the overlay iterates visible drawings and tests point-to-segment distance, point-in-rect, and point-to-handle proximity. The closest match within a threshold is marked as "hovered" and rendered with highlight styling.
-
-### Drag System
-
-When a hovered drawing's handle or body is mousedown'd, the drag system activates. It captures the initial offset and updates anchor points on each `mousemove`, snapping to the price/time grid. `mouseup` commits the final position.
-
-### Rendering
-
-`DrawingOverlay` uses `requestAnimationFrame`-driven Canvas 2D rendering. Each drawing type has a dedicated render function that reads anchor points, converts to pixel coordinates, and draws lines/fills/text. `drawingHelpers.ts` provides pure geometric utilities (distance-to-segment, bezier interpolation, rectangle intersection).
-
----
-
 ## Adding a New Tool
 
 A step-by-step guide for contributors:
@@ -299,19 +257,6 @@ Wire up handle and body dragging by extending the drag handler in `CandlestickCh
 | [Tailwind CSS](https://tailwindcss.com) | Utility-first styling |
 | [emoji-picker-react](https://github.com/ealush/emoji-picker-react) | Emoji selection for annotation tool |
 | [FastAPI](https://fastapi.tiangolo.com) | Backend WebSocket server (planned) |
-
----
-
-## Future Plans
-
-- **Real-time data** — connect the FastAPI WebSocket backend to stream live OHLCV candles
-- **Drawing persistence** — save/load drawings to localStorage or a database
-- **More indicators** — moving averages, Bollinger Bands, RSI overlays
-- **Multi-chart layouts** — side-by-side or stacked chart panels
-- **Undo/redo stack** — proper command-pattern history for all drawing operations
-- **Drawing templates** — save and re-apply drawing configurations
-- **Export** — screenshot and SVG export of chart with drawings
-- **Mobile support** — touch-friendly drawing interactions
 
 ---
 
