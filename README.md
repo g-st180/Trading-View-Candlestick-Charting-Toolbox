@@ -1,6 +1,6 @@
-# 📈 Trading View's Candlestick Charting Toolbox
+# Trading View's Candlestick Charting Toolbox
 
-A browser-based charting tool for technical analysis — built with React, TypeScript, and [lightweight-charts](https://github.com/nicehash/lightweight-charts). Ships with 20+ drawing tools, drag-to-resize handles, and a fully custom canvas overlay renderer.
+A browser-based charting tool for technical analysis — built with React, TypeScript, and [lightweight-charts](https://github.com/nicehash/lightweight-charts). Ships with 40+ drawing tools, drag-to-resize handles, and a fully custom canvas overlay renderer.
 
 > A candlestick charting workspace inspired by professional trading platforms — running entirely in your browser with zero backend dependency.
 
@@ -72,7 +72,9 @@ Trading-View-Candlestick-Charting-Toolbox/
         ├── types/
         │   └── drawing.ts               # Shared TypeScript types
         ├── utils/
-        │   └── drawingHelpers.ts        # Pure geometry & math utilities
+        │   ├── drawingHelpers.ts        # Pure geometry & math utilities
+        │   ├── textAnnotation.ts        # Text annotation sizing utilities
+        │   └── patternTools.ts          # Multi-point pattern config (XABCD, Elliott, etc.)
         ├── components/
         │   ├── DrawingContext.tsx        # React context for drawing state
         │   ├── DrawingOverlay.tsx        # Canvas overlay renderer
@@ -87,7 +89,16 @@ Trading-View-Candlestick-Charting-Toolbox/
 
 ## Drawing Tools
 
-### Lines
+### Crosshair Modes
+
+| Tool | Description |
+|------|-------------|
+| Cross | Standard crosshair cursor |
+| Arrow | Default pointer cursor |
+| Demonstration | Dot cursor for presentations |
+| Eraser | Click to delete drawings |
+
+### Trend Line Tools
 
 | Tool | Description |
 |------|-------------|
@@ -98,7 +109,52 @@ Trading-View-Candlestick-Charting-Toolbox/
 | Horizontal Ray | Half-infinite horizontal from a point |
 | Parallel Channel | Two parallel trend lines with fill |
 
-### Projection
+### Fibonacci
+
+| Tool | Description |
+|------|-------------|
+| Fibonacci Retracement | Standard fib levels (0, 0.236, 0.382, 0.5, 0.618, 0.786, 1) |
+| Gann Box | Grid overlay with Gann ratios |
+
+### Shapes & Brushes
+
+| Tool | Description |
+|------|-------------|
+| Brush | Freehand drawing |
+| Rectangle | Axis-aligned box |
+| Path | Multi-point polyline |
+| Circle | Center + radius |
+| Curve | Quadratic Bezier with control point |
+
+### Arrows
+
+| Tool | Description |
+|------|-------------|
+| Arrow | Simple directional arrow |
+| Arrow Marker | Styled arrow indicator |
+| Arrow Mark Up | Bullish marker (triangle up) |
+| Arrow Mark Down | Bearish marker (triangle down) |
+
+### Chart Patterns
+
+| Tool | Description |
+|------|-------------|
+| XABCD Pattern | 5-point harmonic pattern with diagonals and fill |
+| Cypher Pattern | 5-point Cypher harmonic with diagonals and fill |
+| Head and Shoulders | 7-point reversal pattern with neckline diagonal |
+| ABCD Pattern | 4-point measured-move pattern with diagonals |
+
+### Elliott Waves
+
+| Tool | Description |
+|------|-------------|
+| Elliott Impulse Wave (12345) | 6-point impulse wave pattern |
+| Elliott Correction Wave (ABC) | 4-point corrective wave |
+| Elliott Triangle Wave (ABCDE) | 6-point contracting triangle |
+| Elliott Double Combo Wave (WXY) | 4-point double combination |
+| Elliott Triple Combo Wave (WXYXZ) | 6-point triple combination |
+
+### Forecasting / Projection
 
 | Tool | Description |
 |------|-------------|
@@ -113,45 +169,27 @@ Trading-View-Candlestick-Charting-Toolbox/
 | Date Range | Horizontal distance between two time points |
 | Date & Price Range | Combined area measurement |
 
-### Fibonacci
-
-| Tool | Description |
-|------|-------------|
-| Fibonacci Retracement | Standard fib levels (0, 0.236, 0.382, 0.5, 0.618, 0.786, 1) |
-| Gann Box | Grid overlay with Gann ratios |
-
-### Shapes
-
-| Tool | Description |
-|------|-------------|
-| Brush | Freehand drawing |
-| Rectangle | Axis-aligned box |
-| Path | Multi-point polyline |
-| Circle | Center + radius |
-| Curve | Quadratic Bézier with control point |
-
-### Arrows
-
-| Tool | Description |
-|------|-------------|
-| Arrow | Simple directional arrow |
-| Arrow Marker | Styled arrow indicator |
-| Arrow Mark Up | Bullish marker (▲) |
-| Arrow Mark Down | Bearish marker (▼) |
-
-### Annotation
+### Text & Annotation
 
 | Tool | Description |
 |------|-------------|
 | Text | Editable text label placed on chart |
+| Note | Sticky-note style annotation with rounded box |
+| Price Note | Note with price context |
+| Callout | Speech-bubble style annotation |
+| Comment | Chat-bubble annotation |
+| Price Label | Arrow-shaped label badge |
+| Signpost | Vertical pole with flag label |
+| Flag Mark | Flag marker on a vertical staff |
+| Pin | Map-pin style marker |
 | Emoji | Emoji picker with placement |
 
 ### Utility
 
 | Tool | Description |
 |------|-------------|
-| Zoom | Click-drag to zoom into a region |
-| Crosshair Modes | Cross, arrow, demonstration, eraser |
+| Measure (Ruler) | Ruler tool for distance measurement |
+| Zoom In | Click-drag to zoom into a region |
 | Interactions | Drag handles, drag body, lock, hide, delete, keyboard delete |
 
 ---
@@ -198,6 +236,19 @@ Add proximity detection for your tool's geometry in the hit-test loop inside `Dr
 
 Wire up handle and body dragging by extending the drag handler in `CandlestickChart.tsx` to update your tool's anchor points.
 
+### 8. For multi-point pattern tools
+
+Add a config entry in `utils/patternTools.ts` — the generic handler will pick it up automatically:
+
+```typescript
+'my-pattern': {
+  points: 5,
+  labels: ['A', 'B', 'C', 'D', 'E'],
+  diagonals: [[0, 2], [1, 3]],
+  fill: true,
+}
+```
+
 ---
 
 ## Tech Stack
@@ -214,4 +265,4 @@ Wire up handle and body dragging by extending the drag handler in `CandlestickCh
 
 ---
 
-<sub>Built with ❤️ and too many canvas pixels.</sub>
+<sub>Built with love and too many canvas pixels.</sub>

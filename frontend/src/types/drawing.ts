@@ -24,7 +24,9 @@
  *   - Fibonacci:   'fib' | 'fibonacci-retracement' | 'gann-box'
  *   - Shapes:      'brush' | 'rectangle' | 'path' | 'circle' | 'curve'
  *   - Arrows:      'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown'
- *   - Annotation:  'text' | 'emoji'
+ *   - Annotation:  'text' | 'note' | 'price-note' | 'callout' | 'comment' | 'price-label' | 'signpost' | 'flagmark' | 'pin' | 'emoji'
+ *   - Chart Patterns: 'xabcd' | 'cypher' | 'head-and-shoulders' | 'abcd'
+ *   - Elliott Waves: 'elliott-impulse' | 'elliott-correction' | 'elliott-triangle' | 'elliott-double-combo' | 'elliott-triple-combo'
  *   - Utility:     'zoom'
  */
 export type DrawingTool =
@@ -35,7 +37,10 @@ export type DrawingTool =
 	| 'fib' | 'fibonacci-retracement' | 'gann-box'
 	| 'brush' | 'rectangle' | 'path' | 'circle' | 'curve'
 	| 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown'
-	| 'text' | 'emoji' | 'zoom'
+	| 'text' | 'note' | 'price-note' | 'callout' | 'comment' | 'price-label' | 'signpost' | 'flagmark' | 'pin' | 'emoji'
+	| 'xabcd' | 'cypher' | 'head-and-shoulders' | 'abcd'
+	| 'elliott-impulse' | 'elliott-correction' | 'elliott-triangle' | 'elliott-double-combo' | 'elliott-triple-combo'
+	| 'zoom'
 	| null;
 
 /**
@@ -125,6 +130,9 @@ export interface Drawing {
 
 	/** Emoji character to render inside the emoji box */
 	emojiChar?: string;
+
+	/** User-provided text for the Text annotation tool (inside blue-bordered box) */
+	textContent?: string;
 
 	/** User-provided text label for info-line (shown center-aligned on the line) */
 	label?: string;

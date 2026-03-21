@@ -17,7 +17,7 @@
  *   - Projection: long position, short position, price/date/date-price range
  *   - Shapes: brush, arrows (4 types), rectangle, path, circle, curve
  *   - Fibonacci: fibonacci retracement, gann box
- *   - Text, Emoji (with picker), Ruler (date-price-range shortcut), Zoom
+ *   - Annotation: Text in flyout (same T icon); Emoji separate with picker; Ruler; Zoom
  *   - Bottom: lock, eye (visibility), trash (delete selected)
  */
 import { useEffect, useRef, useState } from 'react';
@@ -66,78 +66,71 @@ const topTools: ToolButton[] = [
 		label: 'Crosshair',
 		icon: (
 			<Icon className="h-7 w-7" strokeWidth={0.95}>
-				<path d="M12 3v6" />
-				<path d="M12 15v6" />
-				<path d="M3 12h6" />
-				<path d="M15 12h6" />
+				<path d="M12 3v18" />
+				<path d="M3 12h18" />
 			</Icon>
 		),
 	},
 	{
 		id: 'lines',
-		label: 'Lines',
+		label: 'Trend Line Tools',
 		icon: (
-			<Icon>
-				<path d="M5 19L19 5" />
-				<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
-				<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
-			</Icon>
-		),
-	},
-	{
-		id: 'projection',
-		label: 'Projection',
-		icon: (
-			<Icon>
-				{/* RR box icon - rectangle with entry line; full 4-20 bounds */}
-				<rect x="4" y="4" width="16" height="16" fill="none" stroke="currentColor" strokeWidth={1} />
-				<path d="M4 12h16" stroke="currentColor" strokeWidth={1} strokeDasharray="2,2" />
-			</Icon>
-		),
-	},
-	{
-		id: 'shapes',
-		label: 'Shapes',
-		icon: (
-			<Icon>
-				<path d="M4 20c3 0 4-1 6-3" />
-				<path d="M10 17l8-8a3 3 0 10-4-4l-8 8" />
-			</Icon>
-		),
-	},
-	{
-		id: 'horizontal-line',
-		label: 'Horizontal line',
-		icon: (
-			<Icon>
-				{/* match Lines icon “box feel”: same default size + stroke; extend line closer to edges */}
-				<path d="M4 12L20 12" />
-				<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={1} />
+			<Icon strokeWidth={1.1}>
+				<path d="M4 20L20 4" />
 			</Icon>
 		),
 	},
 	{
 		id: 'fibonacci',
-		label: 'Fibonacci',
+		label: 'Fib Retracement',
 		icon: (
-			<Icon>
-				<path d="M4 5h16" stroke="currentColor" strokeWidth="1.2" />
-				<path d="M4 10h16" stroke="currentColor" strokeWidth="1.2" />
-				<path d="M4 15h16" stroke="currentColor" strokeWidth="1.2" />
-				<path d="M4 20h16" stroke="currentColor" strokeWidth="1.2" />
-				<circle cx="4" cy="20" r="1.4" fill="white" stroke="currentColor" />
-				<circle cx="20" cy="5" r="1.4" fill="white" stroke="currentColor" />
+			<Icon strokeWidth={1.1}>
+				<path d="M4 4h16" />
+				<path d="M4 9.5h16" />
+				<path d="M4 15h16" />
+				<path d="M4 20h16" />
+				<path d="M4 20L20 4" strokeDasharray="3 2" strokeWidth={0.8} />
 			</Icon>
 		),
 	},
 	{
-		id: 'text',
-		label: 'Text',
+		id: 'shapes',
+		label: 'Shapes & Brushes',
 		icon: (
-			<Icon>
-				<path d="M4 5h16" />
-				<path d="M12 5v14" />
-				<path d="M7 19h10" />
+			<Icon strokeWidth={1.1}>
+				<path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+			</Icon>
+		),
+	},
+	{
+		id: 'patterns',
+		label: 'Patterns',
+		icon: (
+			<Icon strokeWidth={1.2}>
+				<polyline points="3,18 7,8 11,15 15,5 21,16" fill="none" strokeLinejoin="round" strokeLinecap="round" />
+			</Icon>
+		),
+	},
+	{
+		id: 'projection',
+		label: 'Forecasting',
+		icon: (
+			<Icon strokeWidth={1.1}>
+				<rect x="3" y="5" width="18" height="14" rx="1" fill="none" />
+				<path d="M3 12h18" strokeDasharray="2 2" strokeWidth={0.9} />
+				<path d="M3 8.5h18" strokeWidth={0.5} opacity={0.4} />
+				<path d="M3 15.5h18" strokeWidth={0.5} opacity={0.4} />
+			</Icon>
+		),
+	},
+	{
+		id: 'annotation',
+		label: 'Text & Notes',
+		icon: (
+			<Icon strokeWidth={1.1}>
+				<path d="M4 7V4h16v3" />
+				<path d="M12 4v16" />
+				<path d="M8 20h8" />
 			</Icon>
 		),
 	},
@@ -145,11 +138,11 @@ const topTools: ToolButton[] = [
 		id: 'emoji',
 		label: 'Emoji',
 		icon: (
-			<Icon>
+			<Icon strokeWidth={1.1}>
 				<circle cx="12" cy="12" r="9" />
-				<path d="M8.5 10h.01" />
-				<path d="M15.5 10h.01" />
-				<path d="M8 15c1.2 1.5 2.6 2.3 4 2.3S14.8 16.5 16 15" />
+				<path d="M9 9h.01" strokeWidth={2} strokeLinecap="round" />
+				<path d="M15 9h.01" strokeWidth={2} strokeLinecap="round" />
+				<path d="M8 14s1.5 2 4 2 4-2 4-2" />
 			</Icon>
 		),
 	},
@@ -158,33 +151,27 @@ const topTools: ToolButton[] = [
 const midTools: ToolButton[] = [
 	{
 		id: 'ruler',
-		label: 'Scale',
+		label: 'Measure',
 		icon: (
-		  <Icon>
-			<g transform="rotate(-35, 12, 12)">
-			  <rect x="2" y="10" width="20" height="5.5" rx="0.5" stroke="currentColor" strokeWidth={1.1} fill="none" />
-			  {/* Major ticks */}
-			  <line x1="2"  y1="10" x2="2"  y2="14" stroke="currentColor" strokeWidth={1.1} />
-			  <line x1="7"  y1="10" x2="7"  y2="13.5" stroke="currentColor" strokeWidth={1.1} />
-			  <line x1="12" y1="10" x2="12" y2="14" stroke="currentColor" strokeWidth={1.1} />
-			  <line x1="17" y1="10" x2="17" y2="13.5" stroke="currentColor" strokeWidth={1.1} />
-			  <line x1="22" y1="10" x2="22" y2="14" stroke="currentColor" strokeWidth={1.1} />
-			  {/* Minor ticks */}
-			  <line x1="4.5"  y1="10" x2="4.5"  y2="12" stroke="currentColor" strokeWidth={1.1} />
-			  <line x1="9.5"  y1="10" x2="9.5"  y2="12" stroke="currentColor" strokeWidth={1.1} />
-			  <line x1="14.5" y1="10" x2="14.5" y2="12" stroke="currentColor" strokeWidth={1.1} />
-			  <line x1="19.5" y1="10" x2="19.5" y2="12" stroke="currentColor" strokeWidth={1.1} />
-			</g>
-		  </Icon>
+			<Icon strokeWidth={1.1}>
+				<g transform="rotate(-45, 12, 12)">
+					<rect x="2" y="10" width="20" height="4" rx="0.5" fill="none" />
+					<line x1="5" y1="10" x2="5" y2="12.5" />
+					<line x1="8" y1="10" x2="8" y2="12" />
+					<line x1="11" y1="10" x2="11" y2="12.5" />
+					<line x1="14" y1="10" x2="14" y2="12" />
+					<line x1="17" y1="10" x2="17" y2="12.5" />
+				</g>
+			</Icon>
 		),
-	  },
+	},
 	{
 		id: 'zoom',
-		label: 'Zoom',
+		label: 'Zoom In',
 		icon: (
-			<Icon>
-				<circle cx="11" cy="11" r="6" />
-				<path d="M20 20l-3.5-3.5" />
+			<Icon strokeWidth={1.1}>
+				<circle cx="11" cy="11" r="7" />
+				<path d="M21 21l-4.35-4.35" />
 				<path d="M11 8v6" />
 				<path d="M8 11h6" />
 			</Icon>
@@ -247,9 +234,15 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const [showShapesMenu, setShowShapesMenu] = useState(false);
 	const [hoveredShapesItemId, setHoveredShapesItemId] = useState<string | null>(null);
 	const [selectedShapesType, setSelectedShapesType] = useState<'brush' | 'arrow' | 'arrow-marker' | 'arrow-markup' | 'arrow-markdown' | 'rectangle' | 'path' | 'circle' | 'curve'>('brush');
+	const [showPatternsMenu, setShowPatternsMenu] = useState(false);
+	const [hoveredPatternsItemId, setHoveredPatternsItemId] = useState<string | null>(null);
+	const [selectedPatternsType, setSelectedPatternsType] = useState<'xabcd' | 'cypher' | 'head-and-shoulders' | 'abcd' | 'elliott-impulse' | 'elliott-correction' | 'elliott-triangle' | 'elliott-double-combo' | 'elliott-triple-combo'>('xabcd');
 	const [showFibonacciMenu, setShowFibonacciMenu] = useState(false);
 	const [hoveredFibonacciItemId, setHoveredFibonacciItemId] = useState<string | null>(null);
 	const [selectedFibonacciType, setSelectedFibonacciType] = useState<'fibonacci-retracement' | 'gann-box'>('fibonacci-retracement');
+	const [showAnnotationMenu, setShowAnnotationMenu] = useState(false);
+	const [hoveredAnnotationItemId, setHoveredAnnotationItemId] = useState<string | null>(null);
+	const [selectedAnnotationType, setSelectedAnnotationType] = useState<'text' | 'note' | 'price-note' | 'callout' | 'comment' | 'price-label' | 'signpost' | 'flagmark' | 'pin'>('text');
 	const { activeTool, setActiveTool, selectedDrawingId, drawings, removeDrawing, updateDrawing, setSelectedDrawingId, setSelectedHorizontalLineId, setSelectedHorizontalRayId, setSelectedLineId, selectedEmoji, setSelectedEmoji } =
 		useDrawing();
 
@@ -262,7 +255,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		setShowProjectionMenu(false);
 		setShowShapesMenu(false);
 		setShowLinesMenu(false);
+		setShowPatternsMenu(false);
 		setShowFibonacciMenu(false);
+		setShowAnnotationMenu(false);
 		setShowEmojiPicker(false);
 	};
 
@@ -284,6 +279,8 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			setActiveToolId('crosshair');
 			setShowLinesMenu(false);
 			setShowShapesMenu(false);
+			setShowPatternsMenu(false);
+			setShowAnnotationMenu(false);
 			return;
 		}
 
@@ -300,9 +297,17 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			setActiveToolId('shapes');
 			if (activeTool === 'arrow-marker' || activeTool === 'arrow') setSelectedShapesType(activeTool);
 		}
+		if (activeTool === 'xabcd' || activeTool === 'cypher' || activeTool === 'head-and-shoulders' || activeTool === 'abcd' || activeTool === 'elliott-impulse' || activeTool === 'elliott-correction' || activeTool === 'elliott-triangle' || activeTool === 'elliott-double-combo' || activeTool === 'elliott-triple-combo') {
+			setActiveToolId('patterns');
+			setSelectedPatternsType(activeTool as any);
+		}
 		if (activeTool === 'fibonacci-retracement' || activeTool === 'gann-box') {
 			setActiveToolId('fibonacci');
 			setSelectedFibonacciType(activeTool === 'gann-box' ? 'gann-box' : 'fibonacci-retracement');
+		}
+		if (activeTool === 'text' || activeTool === 'note' || activeTool === 'price-note' || activeTool === 'callout' || activeTool === 'comment' || activeTool === 'price-label' || activeTool === 'signpost' || activeTool === 'flagmark' || activeTool === 'pin') {
+			setActiveToolId('annotation');
+			setSelectedAnnotationType(activeTool as any);
 		}
 		if (activeTool === 'emoji') {
 			setActiveToolId('emoji');
@@ -356,9 +361,35 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		{ id: 'curve', label: 'Curve', icon: 'curve' },
 	];
 
+	const chartPatternsMenuItems: Array<{ id: string; label: string }> = [
+		{ id: 'xabcd', label: 'XABCD Pattern' },
+		{ id: 'cypher', label: 'Cypher Pattern' },
+		{ id: 'head-and-shoulders', label: 'Head and Shoulders' },
+		{ id: 'abcd', label: 'ABCD Pattern' },
+	];
+	const elliottWavesMenuItems: Array<{ id: string; label: string }> = [
+		{ id: 'elliott-impulse', label: 'Elliott Impulse Wave (12345)' },
+		{ id: 'elliott-correction', label: 'Elliott Correction Wave (ABC)' },
+		{ id: 'elliott-triangle', label: 'Elliott Triangle Wave (ABCDE)' },
+		{ id: 'elliott-double-combo', label: 'Elliott Double Combo Wave (WXY)' },
+		{ id: 'elliott-triple-combo', label: 'Elliott Triple Combo Wave (WXYXZ)' },
+	];
+
 	const fibonacciMenuItems: Array<{ id: 'fibonacci-retracement' | 'gann-box'; label: string; icon: string }> = [
 		{ id: 'fibonacci-retracement', label: 'Fibonacci Retracement', icon: 'fibonacci-retracement' },
 		{ id: 'gann-box', label: 'Gann box', icon: 'gann-box' },
+	];
+
+	const annotationMenuItems: Array<{ id: string; label: string }> = [
+		{ id: 'text', label: 'Text' },
+		{ id: 'note', label: 'Note' },
+		{ id: 'price-note', label: 'Price Note' },
+		{ id: 'callout', label: 'Callout' },
+		{ id: 'comment', label: 'Comment' },
+		{ id: 'price-label', label: 'Price Label' },
+		{ id: 'signpost', label: 'Signpost' },
+		{ id: 'flagmark', label: 'Flag Mark' },
+		{ id: 'pin', label: 'Pin' },
 	];
 
 	// ── Button Renderer ──
@@ -449,7 +480,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowProjectionMenu(false);
 							setShowShapesMenu(false);
 							setShowLinesMenu(false);
+							setShowPatternsMenu(false);
 							setShowFibonacciMenu(false);
+							setShowAnnotationMenu(false);
 							setShowEmojiPicker(false);
 							setActiveToolId('crosshair');
 							setActiveTool(null);
@@ -567,7 +600,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowCrosshairMenu(false);
 							setShowShapesMenu(false);
 							setShowLinesMenu(false);
+							setShowPatternsMenu(false);
 							setShowFibonacciMenu(false);
+							setShowAnnotationMenu(false);
 							setShowEmojiPicker(false);
 							setActiveToolId('projection');
 							setActiveTool(selectedProjectionType as any);
@@ -766,6 +801,120 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			);
 		}
 
+		// Chart Patterns button with flyout for XABCD etc.
+		if (tool.id === 'patterns') {
+			return (
+				<div key={tool.id} className="relative">
+					<button
+						type="button"
+						aria-label={tool.label}
+						title={tool.label}
+						className={[
+							'h-10 w-10 grid place-items-center rounded-lg transition-colors',
+							activeToolId === 'patterns'
+								? 'text-blue-600'
+								: 'text-slate-900 hover:bg-slate-100 active:bg-slate-200',
+						].join(' ')}
+						onClick={() => {
+							setShowCrosshairMenu(false);
+							setShowProjectionMenu(false);
+							setShowShapesMenu(false);
+							setShowLinesMenu(false);
+							setShowFibonacciMenu(false);
+							setShowAnnotationMenu(false);
+							setShowEmojiPicker(false);
+							setActiveToolId('patterns');
+							setActiveTool(selectedPatternsType as any);
+							setShowPatternsMenu((v) => !v);
+						}}
+					>
+						{tool.icon}
+					</button>
+					{showPatternsMenu && (
+						<div className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[300px] z-50 max-h-[80vh] overflow-y-auto">
+							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
+								Chart Patterns
+							</div>
+							{chartPatternsMenuItems.map((item) => {
+								const isSelected = selectedPatternsType === item.id;
+								const isHovered = hoveredPatternsItemId === item.id;
+								return (
+									<button
+										key={item.id}
+										type="button"
+										onClick={() => {
+											setSelectedPatternsType(item.id as any);
+											setActiveTool(item.id as any);
+											setShowPatternsMenu(false);
+										}}
+										onMouseEnter={() => setHoveredPatternsItemId(item.id)}
+										onMouseLeave={() => setHoveredPatternsItemId(null)}
+										className={[
+											'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
+											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
+										].join(' ')}
+									>
+										<span className="flex items-center gap-2 whitespace-nowrap">
+											<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+												<polyline points="3,18 7,8 11,14 15,6 19,16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" />
+												<circle cx="3" cy="18" r="1.4" fill="white" stroke="currentColor" />
+												<circle cx="7" cy="8" r="1.4" fill="white" stroke="currentColor" />
+												<circle cx="11" cy="14" r="1.4" fill="white" stroke="currentColor" />
+												<circle cx="15" cy="6" r="1.4" fill="white" stroke="currentColor" />
+												<circle cx="19" cy="16" r="1.4" fill="white" stroke="currentColor" />
+											</Icon>
+											{item.label}
+										</span>
+										{(isSelected || isHovered) && (
+											<svg className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.2}>
+												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+											</svg>
+										)}
+									</button>
+								);
+							})}
+							<div className="px-3 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider pt-2 border-t border-slate-100 mt-1">
+								Elliott Waves
+							</div>
+							{elliottWavesMenuItems.map((item) => {
+								const isSelected = selectedPatternsType === item.id;
+								const isHovered = hoveredPatternsItemId === item.id;
+								return (
+									<button
+										key={item.id}
+										type="button"
+										onClick={() => {
+											setSelectedPatternsType(item.id as any);
+											setActiveTool(item.id as any);
+											setShowPatternsMenu(false);
+										}}
+										onMouseEnter={() => setHoveredPatternsItemId(item.id)}
+										onMouseLeave={() => setHoveredPatternsItemId(null)}
+										className={[
+											'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
+											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
+										].join(' ')}
+									>
+										<span className="flex items-center gap-2 whitespace-nowrap">
+											<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={1}>
+												<polyline points="3,20 6,8 9,14 14,4 17,12 21,6" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round" />
+											</Icon>
+											{item.label}
+										</span>
+										{(isSelected || isHovered) && (
+											<svg className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.2}>
+												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+											</svg>
+										)}
+									</button>
+								);
+							})}
+						</div>
+					)}
+				</div>
+			);
+		}
+
 		// Fibonacci button with flyout for fibonacci retracement and gann box
 		if (tool.id === 'fibonacci') {
 			return (
@@ -785,6 +934,8 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowProjectionMenu(false);
 							setShowShapesMenu(false);
 							setShowLinesMenu(false);
+							setShowPatternsMenu(false);
+							setShowAnnotationMenu(false);
 							setShowEmojiPicker(false);
 							setActiveToolId('fibonacci');
 							setActiveTool(selectedFibonacciType as any);
@@ -880,7 +1031,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowCrosshairMenu(false);
 							setShowProjectionMenu(false);
 							setShowLinesMenu(false);
+							setShowPatternsMenu(false);
 							setShowFibonacciMenu(false);
+							setShowAnnotationMenu(false);
 							setShowEmojiPicker(false);
 							setActiveToolId('shapes');
 							setActiveTool(selectedShapesType as any);
@@ -1142,7 +1295,9 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowCrosshairMenu(false);
 							setShowProjectionMenu(false);
 							setShowShapesMenu(false);
+							setShowPatternsMenu(false);
 							setShowFibonacciMenu(false);
+							setShowAnnotationMenu(false);
 							setShowEmojiPicker(false);
 							setActiveToolId('lines');
 							setActiveTool(selectedLinesType as any);
@@ -1327,7 +1482,96 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			);
 		}
 
-		// Emoji button with inline emoji picker popover
+		// Annotation: flyout lists Text only (same T icon as toolbar). Emoji is a separate tool below.
+		if (tool.id === 'annotation') {
+			const renderAnnotationIcon = (iconId: string, isSelected: boolean) => {
+				const cls = `h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`;
+				const sw = 1.2;
+				switch (iconId) {
+					case 'text': return <Icon className={cls} strokeWidth={sw}><path d="M4 7V4h16v3" /><path d="M12 4v16" /><path d="M8 20h8" /></Icon>;
+					case 'note': return <Icon className={cls} strokeWidth={sw}><rect x="3" y="3" width="18" height="18" rx="2" fill="none" /><path d="M7 8h10" /><path d="M7 12h6" /></Icon>;
+					case 'price-note': return <Icon className={cls} strokeWidth={sw}><rect x="3" y="3" width="18" height="18" rx="2" fill="none" /><path d="M7 8h10" /><path d="M7 12h4" /><path d="M7 16h3" /></Icon>;
+					case 'callout': return <Icon className={cls} strokeWidth={sw}><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" /></Icon>;
+					case 'comment': return <Icon className={cls} strokeWidth={sw}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></Icon>;
+					case 'price-label': return <Icon className={cls} strokeWidth={sw}><path d="M4 7h12l4 5-4 5H4V7z" fill="none" /><path d="M8 12h6" /></Icon>;
+					case 'signpost': return <Icon className={cls} strokeWidth={sw}><path d="M12 3v18" /><path d="M6 7h12l-2 3 2 3H6V7z" fill="none" /></Icon>;
+					case 'flagmark': return <Icon className={cls} strokeWidth={sw}><path d="M4 3v18" /><path d="M4 3h12l-3 5 3 5H4" fill="none" /></Icon>;
+					case 'pin': return <Icon className={cls} strokeWidth={sw}><path d="M12 21l0-8" /><path d="M9 13h6" /><circle cx="12" cy="8" r="4" fill="none" /></Icon>;
+					default: return null;
+				}
+			};
+			return (
+				<div key={tool.id} className="relative">
+					<button
+						type="button"
+						aria-label={tool.label}
+						title={tool.label}
+						className={[
+							'h-10 w-10 grid place-items-center rounded-lg transition-colors',
+							activeToolId === 'annotation'
+								? 'text-blue-600'
+								: 'text-slate-900 hover:bg-slate-100 active:bg-slate-200',
+						].join(' ')}
+						onClick={() => {
+							setShowCrosshairMenu(false);
+							setShowProjectionMenu(false);
+							setShowShapesMenu(false);
+							setShowLinesMenu(false);
+							setShowPatternsMenu(false);
+							setShowFibonacciMenu(false);
+							setShowEmojiPicker(false);
+							setActiveToolId('annotation');
+							setActiveTool(selectedAnnotationType as any);
+							setShowAnnotationMenu((v) => !v);
+						}}
+					>
+						{tool.icon}
+					</button>
+					{showAnnotationMenu && (
+						<div className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[280px] z-50">
+							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
+								Annotation
+							</div>
+							{annotationMenuItems.map((item) => {
+								const isSelected = selectedAnnotationType === item.id;
+								const isHovered = hoveredAnnotationItemId === item.id;
+								return (
+									<button
+										key={item.id}
+										type="button"
+										onClick={() => {
+											setActiveTool(item.id as any);
+											setActiveToolId('annotation');
+											setSelectedAnnotationType(item.id as any);
+											setShowAnnotationMenu(false);
+											setShowEmojiPicker(false);
+										}}
+										onMouseEnter={() => setHoveredAnnotationItemId(item.id)}
+										onMouseLeave={() => setHoveredAnnotationItemId(null)}
+										className={[
+											'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
+											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
+										].join(' ')}
+									>
+										<span className="flex items-center gap-2 whitespace-nowrap">
+											{renderAnnotationIcon(item.id, isSelected)}
+											{item.label}
+										</span>
+										{(isSelected || isHovered) && (
+											<svg className={`h-7 w-7 ${isSelected ? 'text-blue-500' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.2}>
+												<path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+											</svg>
+										)}
+									</button>
+								);
+							})}
+						</div>
+					)}
+				</div>
+			);
+		}
+
+		// Emoji: separate tool with emoji picker (not part of Annotation menu)
 		if (tool.id === 'emoji') {
 			return (
 				<div key={tool.id} className="relative">
@@ -1346,7 +1590,6 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowEmojiPicker((v) => !v);
 							if (!showEmojiPicker) {
 								setActiveToolId('emoji');
-								// Keep current selected emoji or leave tool inactive until one is picked
 								if (selectedEmoji) setActiveTool('emoji' as any);
 							} else {
 								setActiveTool(null);
@@ -1388,6 +1631,14 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 						isRulerActive ? 'text-blue-600' : 'text-slate-900 hover:bg-slate-100 active:bg-slate-200',
 					].join(' ')}
 					onClick={() => {
+						setShowCrosshairMenu(false);
+						setShowProjectionMenu(false);
+						setShowShapesMenu(false);
+						setShowLinesMenu(false);
+						setShowPatternsMenu(false);
+						setShowFibonacciMenu(false);
+						setShowAnnotationMenu(false);
+						setShowEmojiPicker(false);
 						setActiveToolId('ruler');
 						setActiveTool('date-price-range' as any);
 					}}
@@ -1410,9 +1661,16 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 						: 'text-slate-900 hover:bg-slate-100 active:bg-slate-200',
 				].join(' ')}
 				onClick={() => {
+					setShowCrosshairMenu(false);
+					setShowProjectionMenu(false);
+					setShowShapesMenu(false);
+					setShowLinesMenu(false);
+					setShowPatternsMenu(false);
+					setShowFibonacciMenu(false);
+					setShowAnnotationMenu(false);
+					setShowEmojiPicker(false);
 					setActiveToolId(tool.id);
-					// Activate drawing tool if it's a drawing tool
-					if (tool.id === 'lines' || tool.id === 'horizontal-line' || tool.id === 'fib') {
+					if (tool.id === 'lines' || tool.id === 'fib') {
 						setActiveTool(tool.id as any);
 					} else if (tool.id === 'zoom') {
 						setActiveTool('zoom' as any);

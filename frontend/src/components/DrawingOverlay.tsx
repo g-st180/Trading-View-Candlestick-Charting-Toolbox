@@ -36,6 +36,8 @@ import {
 	strokeSmoothCurve,
 	drawRoundedRect,
 } from '../utils/drawingHelpers';
+import { TEXT_ANNOTATION_FONT, TEXT_PAD_PX, textBoxWidthPx } from '../utils/textAnnotation';
+import { isPatternTool, getPatternConfig } from '../utils/patternTools';
 
 export type { CandleBar } from '../types/drawing';
 
@@ -83,13 +85,20 @@ export interface DrawingOverlayProps {
 	/** Gann box: in-progress drawing id for live preview */
 	gannBoxInProgressIdRef?: React.RefObject<string | null>;
 	gannBoxLiveTick?: number;
+	/** Multi-point pattern tools: in-progress + live end for preview */
+	patternInProgressIdRef?: React.RefObject<string | null>;
+	patternLiveEndTimeRef?: React.RefObject<number | null>;
+	patternLiveEndPriceRef?: React.RefObject<number | null>;
+	patternLiveTick?: number;
 	/** Zoom tool: drag rect (start/end in container pixels) for live preview */
 	zoomRectStartRef?: React.RefObject<{ x: number; y: number } | null>;
 	zoomRectEndRef?: React.RefObject<{ x: number; y: number } | null>;
 	zoomLiveTick?: number;
+	/** Text tool: while this drawing id is being edited, canvas skips painting that box (inline input in CandlestickChart) */
+	editingTextDrawingId?: string | null;
 }
 
-export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0, datePriceRangeInProgressIdRef, datePriceRangeLiveEndTimeRef, datePriceRangeLiveEndPriceRef, datePriceRangeLiveTick = 0, rectangleInProgressIdRef, rectangleLiveTick = 0, pathInProgressIdRef, pathLiveEndTimeRef, pathLiveEndPriceRef, pathLiveTick = 0, circleInProgressIdRef, circleLiveEndTimeRef, circleLiveEndPriceRef, circleLiveTick = 0, fibRetracementInProgressIdRef, fibRetracementLiveEndTimeRef, fibRetracementLiveEndPriceRef, fibRetracementLiveTick = 0, gannBoxInProgressIdRef, gannBoxLiveTick = 0, zoomRectStartRef, zoomRectEndRef, zoomLiveTick = 0 }: DrawingOverlayProps) {
+export default function DrawingOverlay({ chart, series, containerRef, underlayIsPrimitive = false, candlestickDataRef, candlestickDataVersion = 0, priceRangeInProgressIdRef, priceRangeLiveEndPriceRef, priceRangeLiveEndTimeRef, priceRangeLiveTick = 0, dateRangeInProgressIdRef, dateRangeLiveEndTimeRef, dateRangeLiveEndPriceRef, dateRangeLiveTick = 0, datePriceRangeInProgressIdRef, datePriceRangeLiveEndTimeRef, datePriceRangeLiveEndPriceRef, datePriceRangeLiveTick = 0, rectangleInProgressIdRef, rectangleLiveTick = 0, pathInProgressIdRef, pathLiveEndTimeRef, pathLiveEndPriceRef, pathLiveTick = 0, circleInProgressIdRef, circleLiveEndTimeRef, circleLiveEndPriceRef, circleLiveTick = 0, fibRetracementInProgressIdRef, fibRetracementLiveEndTimeRef, fibRetracementLiveEndPriceRef, fibRetracementLiveTick = 0, gannBoxInProgressIdRef, gannBoxLiveTick = 0, patternInProgressIdRef, patternLiveEndTimeRef, patternLiveEndPriceRef, patternLiveTick = 0, zoomRectStartRef, zoomRectEndRef, zoomLiveTick = 0, editingTextDrawingId = null }: DrawingOverlayProps) {
 	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const { drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, updateDrawing } = useDrawing();
 	const drawingsRef = useRef<Drawing[]>([]);
@@ -125,7 +134,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 		// Trigger a repaint whenever drawings or candle data change (for RR outcome dotted line).
 		// priceRangeLiveTick drives smooth price-range live preview.
 		scheduleRedrawRef.current?.();
-	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, datePriceRangeLiveTick, rectangleLiveTick, pathLiveTick, circleLiveTick, fibRetracementLiveTick, gannBoxLiveTick, zoomLiveTick]);
+	}, [drawings, currentDrawing, selectedHorizontalLineId, hoveredHorizontalLineId, hoveredHorizontalLineHandleId, selectedHorizontalRayId, hoveredHorizontalRayId, hoveredHorizontalRayHandleId, selectedLineId, hoveredLineId, hoveredLineHandleId, candlestickDataVersion, priceRangeLiveTick, dateRangeLiveTick, datePriceRangeLiveTick, rectangleLiveTick, pathLiveTick, circleLiveTick, fibRetracementLiveTick, gannBoxLiveTick, patternLiveTick, zoomLiveTick]);
 
 	useEffect(() => {
 		if (!canvasRef.current || !containerRef.current) return;
@@ -269,7 +278,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				scheduleRedrawRef.current = null;
 			}
 		};
-	}, [chart, series, containerRef]);
+	}, [chart, series, containerRef, editingTextDrawingId]);
 
 	const drawDrawing = (
 		ctx: CanvasRenderingContext2D,
@@ -1532,6 +1541,361 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.stroke();
 					ctx.restore();
 				});
+			}
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
+		// TEXT / ANNOTATION: single-line label. Box auto-sized from text content.
+		// Covers: text, note, price-note, callout, comment, price-label, signpost, flagmark, pin
+		// ============================================================================
+		const ANNOTATION_TYPES = new Set(['text', 'note', 'price-note', 'callout', 'comment', 'price-label', 'signpost', 'flagmark', 'pin']);
+		if (ANNOTATION_TYPES.has(drawing.type as string) && chart && series && drawing.startTime != null && drawing.startPrice != null && drawing.endPrice != null) {
+			if (editingTextDrawingId === drawing.id) return;
+			const ts = chart.timeScale();
+			const leftT = Math.min(Number(drawing.startTime), Number(drawing.endTime ?? drawing.startTime));
+			const minP = Math.min(drawing.startPrice, drawing.endPrice);
+			const maxP = Math.max(drawing.startPrice, drawing.endPrice);
+			const leftX = Number(ts.timeToCoordinate(leftT as any));
+			const topY = series.priceToCoordinate(maxP);
+			const bottomY = series.priceToCoordinate(minP);
+			if (leftX == null || topY == null || bottomY == null) return;
+			const rawH = Math.abs(bottomY - topY);
+			const h = Math.max(rawH * 0.9, 20);
+			const top = Math.min(topY, bottomY) + rawH * 0.05;
+			const raw = (drawing.textContent ?? '').replace(/\r?\n/g, ' ').trim();
+			const w = textBoxWidthPx(raw);
+			const borderColor = drawing.style?.color || '#2563eb';
+			const selectedOrHovered = selectedLineIdRef.current === drawing.id || hoveredLineIdRef.current === drawing.id;
+			const aType = drawing.type as string;
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+			ctx.font = TEXT_ANNOTATION_FONT;
+			const displayText = raw.length ? raw : ' ';
+			const textW = ctx.measureText(displayText).width;
+			const boxW = Math.max(w, textW + TEXT_PAD_PX * 2 + 10);
+
+			if (aType === 'text') {
+				if (selectedOrHovered && w >= 1 && h >= 1) {
+					ctx.strokeStyle = borderColor;
+					ctx.lineWidth = drawing.style?.width ?? 2;
+					ctx.setLineDash([]);
+					ctx.strokeRect(leftX, top, w, h);
+				}
+				ctx.fillStyle = '#0f172a';
+				ctx.textAlign = 'left';
+				ctx.textBaseline = 'middle';
+				ctx.fillText(displayText, leftX + TEXT_PAD_PX + 2, top + h / 2);
+
+			} else if (aType === 'note') {
+				ctx.fillStyle = '#fffde7';
+				ctx.fillRect(leftX, top, boxW, h);
+				ctx.strokeStyle = '#e6c300';
+				ctx.lineWidth = 1;
+				ctx.strokeRect(leftX, top, boxW, h);
+				ctx.fillStyle = borderColor;
+				ctx.fillRect(leftX, top, 4, h);
+				ctx.fillStyle = '#0f172a';
+				ctx.textAlign = 'left';
+				ctx.textBaseline = 'middle';
+				ctx.fillText(displayText, leftX + 10, top + h / 2);
+
+			} else if (aType === 'price-note') {
+				ctx.fillStyle = '#f0f9ff';
+				ctx.fillRect(leftX, top, boxW, h);
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 1;
+				ctx.strokeRect(leftX, top, boxW, h);
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 1.5;
+				ctx.setLineDash([4, 3]);
+				ctx.beginPath();
+				ctx.moveTo(leftX + boxW, top + h / 2);
+				ctx.lineTo(leftX + boxW + 40, top + h / 2);
+				ctx.stroke();
+				ctx.setLineDash([]);
+				const priceStr = drawing.startPrice != null ? drawing.startPrice.toFixed(2) : '';
+				ctx.fillStyle = borderColor;
+				ctx.fillRect(leftX + boxW + 40, top + h / 2 - 9, ctx.measureText(priceStr).width + 8, 18);
+				ctx.fillStyle = '#fff';
+				ctx.textAlign = 'left';
+				ctx.textBaseline = 'middle';
+				ctx.fillText(priceStr, leftX + boxW + 44, top + h / 2);
+				ctx.fillStyle = '#0f172a';
+				ctx.fillText(displayText, leftX + TEXT_PAD_PX + 4, top + h / 2);
+
+			} else if (aType === 'callout') {
+				const bubbleX = leftX + 30;
+				const bubbleY = top - h - 10;
+				const bubbleW = boxW;
+				const bubbleH = h;
+				drawRoundedRect(ctx, bubbleX, bubbleY, bubbleW, bubbleH, 6);
+				ctx.fillStyle = '#f8fafc';
+				ctx.fill();
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 1.5;
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.moveTo(leftX, top);
+				ctx.lineTo(bubbleX + 10, bubbleY + bubbleH);
+				ctx.lineTo(bubbleX + 20, bubbleY + bubbleH);
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 1.5;
+				ctx.stroke();
+				ctx.fillStyle = borderColor;
+				ctx.beginPath();
+				ctx.arc(leftX, top, 3, 0, Math.PI * 2);
+				ctx.fill();
+				ctx.fillStyle = '#0f172a';
+				ctx.textAlign = 'left';
+				ctx.textBaseline = 'middle';
+				ctx.fillText(displayText, bubbleX + TEXT_PAD_PX + 4, bubbleY + bubbleH / 2);
+
+			} else if (aType === 'comment') {
+				drawRoundedRect(ctx, leftX, top, boxW, h, 6);
+				ctx.fillStyle = '#f1f5f9';
+				ctx.fill();
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 1.5;
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.moveTo(leftX + 8, top + h);
+				ctx.lineTo(leftX + 2, top + h + 10);
+				ctx.lineTo(leftX + 18, top + h);
+				ctx.fillStyle = '#f1f5f9';
+				ctx.fill();
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 1.5;
+				ctx.stroke();
+				ctx.fillStyle = '#f1f5f9';
+				ctx.fillRect(leftX + 9, top + h - 1, 8, 2);
+				ctx.fillStyle = '#0f172a';
+				ctx.textAlign = 'left';
+				ctx.textBaseline = 'middle';
+				ctx.fillText(displayText, leftX + TEXT_PAD_PX + 4, top + h / 2);
+
+			} else if (aType === 'price-label') {
+				const arrowTip = 8;
+				ctx.beginPath();
+				ctx.moveTo(leftX, top);
+				ctx.lineTo(leftX + boxW, top);
+				ctx.lineTo(leftX + boxW + arrowTip, top + h / 2);
+				ctx.lineTo(leftX + boxW, top + h);
+				ctx.lineTo(leftX, top + h);
+				ctx.closePath();
+				ctx.fillStyle = borderColor;
+				ctx.fill();
+				ctx.fillStyle = '#fff';
+				ctx.textAlign = 'left';
+				ctx.textBaseline = 'middle';
+				ctx.fillText(displayText, leftX + TEXT_PAD_PX + 4, top + h / 2);
+
+			} else if (aType === 'signpost') {
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 2;
+				ctx.beginPath();
+				ctx.moveTo(leftX, top - 5);
+				ctx.lineTo(leftX, top + h + 15);
+				ctx.stroke();
+				const signW = boxW;
+				const signH = h * 0.75;
+				const signTop = top;
+				const arrowTip = 8;
+				ctx.beginPath();
+				ctx.moveTo(leftX, signTop);
+				ctx.lineTo(leftX + signW, signTop);
+				ctx.lineTo(leftX + signW + arrowTip, signTop + signH / 2);
+				ctx.lineTo(leftX + signW, signTop + signH);
+				ctx.lineTo(leftX, signTop + signH);
+				ctx.closePath();
+				ctx.fillStyle = borderColor;
+				ctx.globalAlpha = 0.15;
+				ctx.fill();
+				ctx.globalAlpha = 1;
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 1;
+				ctx.stroke();
+				ctx.fillStyle = '#0f172a';
+				ctx.textAlign = 'left';
+				ctx.textBaseline = 'middle';
+				ctx.fillText(displayText, leftX + TEXT_PAD_PX + 4, signTop + signH / 2);
+
+			} else if (aType === 'flagmark') {
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 2;
+				ctx.beginPath();
+				ctx.moveTo(leftX, top - 5);
+				ctx.lineTo(leftX, top + h + 15);
+				ctx.stroke();
+				const flagW = boxW;
+				const flagH = h * 0.65;
+				ctx.beginPath();
+				ctx.moveTo(leftX, top);
+				ctx.lineTo(leftX + flagW, top);
+				ctx.lineTo(leftX + flagW - 6, top + flagH / 2);
+				ctx.lineTo(leftX + flagW, top + flagH);
+				ctx.lineTo(leftX, top + flagH);
+				ctx.closePath();
+				ctx.fillStyle = borderColor;
+				ctx.globalAlpha = 0.2;
+				ctx.fill();
+				ctx.globalAlpha = 1;
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 1;
+				ctx.stroke();
+				ctx.fillStyle = '#0f172a';
+				ctx.textAlign = 'left';
+				ctx.textBaseline = 'middle';
+				ctx.fillText(displayText, leftX + TEXT_PAD_PX + 4, top + flagH / 2);
+
+			} else if (aType === 'pin') {
+				const pinR = 8;
+				const cx = leftX + pinR;
+				const cy = top + pinR;
+				ctx.fillStyle = borderColor;
+				ctx.beginPath();
+				ctx.arc(cx, cy, pinR, 0, Math.PI * 2);
+				ctx.fill();
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 2;
+				ctx.beginPath();
+				ctx.moveTo(cx, cy + pinR);
+				ctx.lineTo(cx, top + h + 10);
+				ctx.stroke();
+				ctx.beginPath();
+				ctx.arc(cx, cy, pinR - 2, 0, Math.PI * 2);
+				ctx.fillStyle = '#fff';
+				ctx.fill();
+				ctx.beginPath();
+				ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+				ctx.fillStyle = borderColor;
+				ctx.fill();
+				if (raw.length) {
+					ctx.fillStyle = '#0f172a';
+					ctx.textAlign = 'left';
+					ctx.textBaseline = 'middle';
+					ctx.fillText(displayText, leftX + pinR * 2 + 6, top + h / 2);
+				}
+			}
+
+			if (selectedOrHovered && aType !== 'text') {
+				ctx.strokeStyle = borderColor;
+				ctx.lineWidth = 1;
+				ctx.setLineDash([4, 3]);
+				ctx.strokeRect(leftX - 2, top - 2, boxW + 4, h + 4);
+				ctx.setLineDash([]);
+			}
+			ctx.restore();
+			return;
+		}
+
+		// ============================================================================
+		// PATTERN TOOLS: multi-point zigzag (XABCD, Cypher, ABCD, Head & Shoulders, Elliott Waves)
+		// ============================================================================
+		if (isPatternTool(drawing.type as string) && chart && series && drawing.points?.length) {
+			const cfg = getPatternConfig(drawing.type as string);
+			if (!cfg) return;
+			const ts = chart.timeScale();
+			const pts = drawing.points;
+			const isInProgress = patternInProgressIdRef?.current === drawing.id;
+			const screenPts: { x: number; y: number }[] = [];
+			for (const p of pts) {
+				const sx = ts.timeToCoordinate(p.time as any);
+				const sy = series.priceToCoordinate(p.price);
+				if (sx == null || sy == null) return;
+				screenPts.push({ x: Number(sx), y: sy });
+			}
+			if (isInProgress && patternLiveEndTimeRef?.current != null && patternLiveEndPriceRef?.current != null) {
+				const lx = ts.timeToCoordinate(patternLiveEndTimeRef.current as any);
+				const ly = series.priceToCoordinate(patternLiveEndPriceRef.current);
+				if (lx != null && ly != null) screenPts.push({ x: Number(lx), y: ly });
+			}
+			if (screenPts.length < 1) return;
+			const color = drawing.style?.color || '#2563eb';
+			const lw = drawing.style?.width || 2;
+			ctx.save();
+			ctx.beginPath();
+			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
+			ctx.clip();
+
+			// Solid zigzag lines
+			ctx.strokeStyle = color;
+			ctx.lineWidth = lw;
+			ctx.setLineDash([]);
+			ctx.beginPath();
+			ctx.moveTo(screenPts[0].x, screenPts[0].y);
+			for (let i = 1; i < screenPts.length; i++) ctx.lineTo(screenPts[i].x, screenPts[i].y);
+			ctx.stroke();
+
+			// Dashed diagonals
+			if (cfg.diagonals) {
+				ctx.setLineDash([6, 4]);
+				ctx.lineWidth = 1;
+				ctx.globalAlpha = 0.5;
+				for (const [a, b] of cfg.diagonals) {
+					if (a < screenPts.length && b < screenPts.length) {
+						ctx.beginPath();
+						ctx.moveTo(screenPts[a].x, screenPts[a].y);
+						ctx.lineTo(screenPts[b].x, screenPts[b].y);
+						ctx.stroke();
+					}
+				}
+				ctx.globalAlpha = 1;
+				ctx.setLineDash([]);
+			}
+
+			// Filled polygon when complete
+			if (cfg.fill && screenPts.length >= cfg.points) {
+				ctx.beginPath();
+				ctx.moveTo(screenPts[0].x, screenPts[0].y);
+				for (let i = 1; i < cfg.points; i++) ctx.lineTo(screenPts[i].x, screenPts[i].y);
+				ctx.closePath();
+				ctx.fillStyle = color;
+				ctx.globalAlpha = 0.08;
+				ctx.fill();
+				ctx.globalAlpha = 1;
+			}
+
+			// Labels
+			ctx.font = 'bold 12px system-ui, sans-serif';
+			ctx.textAlign = 'center';
+			for (let i = 0; i < Math.min(screenPts.length, cfg.labels.length); i++) {
+				const above = i % 2 === 1;
+				ctx.fillStyle = color;
+				ctx.textBaseline = above ? 'bottom' : 'top';
+				ctx.fillText(cfg.labels[i], screenPts[i].x, screenPts[i].y + (above ? -10 : 10));
+			}
+
+			// Fibonacci ratios on diagonals (only for harmonic patterns with diagonals)
+			if (cfg.diagonals && screenPts.length >= 3) {
+				ctx.fillStyle = '#64748b';
+				ctx.font = '11px system-ui, sans-serif';
+				ctx.textBaseline = 'middle';
+				for (const [a, b] of cfg.diagonals) {
+					if (a >= screenPts.length || b >= screenPts.length) continue;
+					const refA = a === 0 && screenPts.length > 1 ? 1 : (a > 0 ? a - 1 : 0);
+					const move = Math.abs(screenPts[b].y - screenPts[a].y);
+					const base = Math.abs(screenPts[refA].y - screenPts[a].y);
+					if (base > 0) {
+						const ratio = (move / base).toFixed(3);
+						ctx.fillText(ratio, (screenPts[a].x + screenPts[b].x) / 2, (screenPts[a].y + screenPts[b].y) / 2);
+					}
+				}
+			}
+
+			// Reposition bubbles — always visible (during drawing and after)
+			for (let i = 0; i < Math.min(screenPts.length, cfg.points); i++) {
+				if (isInProgress && i === screenPts.length - 1) continue;
+				ctx.beginPath();
+				ctx.arc(screenPts[i].x, screenPts[i].y, 5, 0, Math.PI * 2);
+				ctx.fillStyle = '#fff';
+				ctx.fill();
+				ctx.strokeStyle = color;
+				ctx.lineWidth = 2;
+				ctx.stroke();
 			}
 			ctx.restore();
 			return;

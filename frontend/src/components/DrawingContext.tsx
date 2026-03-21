@@ -18,7 +18,7 @@
  * RE-EXPORTS: Types are defined in `types/drawing.ts` and re-exported here
  * for backward compatibility, so existing imports continue to work.
  */
-import { createContext, useContext, useState, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useRef, useCallback, ReactNode } from 'react';
 
 // Re-export shared types so existing imports from './DrawingContext' still work
 export type { DrawingTool, ChartPoint, ScreenPoint, Drawing, CandleBar } from '../types/drawing';
@@ -130,9 +130,18 @@ export function DrawingProvider({ children }: { children: ReactNode }) {
 		setDrawings((prev) => [...prev, drawing]);
 	};
 
-	const updateDrawing = (id: string, updater: (prev: Drawing) => Drawing) => {
-		setDrawings((prev) => prev.map((d) => (d.id === id ? updater(d) : d)));
-	};
+	/** Stable identity + skips setState when the updater returns the same drawing reference (avoids render loops). */
+	const updateDrawing = useCallback((id: string, updater: (prev: Drawing) => Drawing) => {
+		setDrawings((prev) => {
+			const idx = prev.findIndex((d) => d.id === id);
+			if (idx === -1) return prev;
+			const next = updater(prev[idx]);
+			if (next === prev[idx]) return prev;
+			const copy = [...prev];
+			copy[idx] = next;
+			return copy;
+		});
+	}, []);
 
 	const removeDrawing = (id: string) => {
 		setDrawings((prev) => prev.filter((d) => d.id !== id));
