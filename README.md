@@ -7,14 +7,14 @@ A browser-based charting tool for technical analysis — built with React, TypeS
 ## Screenshots
 
 <p align="center">
-  <img src="./docs/screenshots/767F1E0C-0E2B-4EB1-89A8-252288AA98E6_1_201_a.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — chart view 1" />
+  <img src="./docs/screenshots/1.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — chart view 1" />
   &nbsp;
-  <img src="./docs/screenshots/5AEA70F1-006E-492A-92F0-C9B18900B5DE_1_201_a.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — chart view 2" />
+  <img src="./docs/screenshots/2.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — chart view 2" />
 </p>
 <p align="center">
-  <img src="./docs/screenshots/BBB5FA03-005D-4E30-B31E-296BFE108D39_1_201_a.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — drawing tools" />
+  <img src="./docs/screenshots/3.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — drawing tools" />
   &nbsp;
-  <img src="./docs/screenshots/E0FEB9FB-3F9E-4872-B58B-98A0EEDB2230_1_201_a.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — annotations and overlays" />
+  <img src="./docs/screenshots/4.jpeg" width="48%" alt="Trading View's Candlestick Charting Toolbox — annotations and overlays" />
 </p>
 
 ---
