@@ -33,8 +33,8 @@ A browser-based charting tool for technical analysis — built with React, TypeS
 ## Quick Start
 
 ```bash
-git clone https://github.com/g-st180/groww_clone.git
-cd groww_clone
+git clone https://github.com/g-st180/Trading-View-Candlestick-Charting-Toolbox.git
+cd Trading-View-Candlestick-Charting-Toolbox
 
 # Install frontend dependencies
 cd frontend
@@ -96,7 +96,7 @@ Data flow:
 ## Project Structure
 
 ```
-groww_clone/
+Trading-View-Candlestick-Charting-Toolbox/
 ├── README.md
 ├── .gitignore
 ├── docs/
