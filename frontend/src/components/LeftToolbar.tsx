@@ -66,8 +66,10 @@ const topTools: ToolButton[] = [
 		label: 'Crosshair',
 		icon: (
 			<Icon className="h-7 w-7" strokeWidth={0.95}>
-				<path d="M12 3v18" />
-				<path d="M3 12h18" />
+				<path d="M12 3v8" />
+				<path d="M12 14v7" />
+				<path d="M3 12h8" />
+				<path d="M14 12h7" />
 			</Icon>
 		),
 	},
@@ -76,7 +78,9 @@ const topTools: ToolButton[] = [
 		label: 'Trend Line Tools',
 		icon: (
 			<Icon strokeWidth={1.1}>
-				<path d="M4 20L20 4" />
+				<path d="M5 19L19 5" />
+				<circle cx="5" cy="19" r="1.5" fill="white" stroke="currentColor" strokeWidth={1} />
+				<circle cx="19" cy="5" r="1.5" fill="white" stroke="currentColor" strokeWidth={1} />
 			</Icon>
 		),
 	},
@@ -85,11 +89,13 @@ const topTools: ToolButton[] = [
 		label: 'Fib Retracement',
 		icon: (
 			<Icon strokeWidth={1.1}>
-				<path d="M4 4h16" />
-				<path d="M4 9.5h16" />
+				<path d="M4 5h16" />
+				<path d="M4 10h16" />
 				<path d="M4 15h16" />
 				<path d="M4 20h16" />
-				<path d="M4 20L20 4" strokeDasharray="3 2" strokeWidth={0.8} />
+				<path d="M4 20L20 5" strokeDasharray="3 2" strokeWidth={0.8} />
+				<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={1} />
+				<circle cx="20" cy="5" r="1.5" fill="white" stroke="currentColor" strokeWidth={1} />
 			</Icon>
 		),
 	},
@@ -108,6 +114,11 @@ const topTools: ToolButton[] = [
 		icon: (
 			<Icon strokeWidth={1.2}>
 				<polyline points="3,18 7,8 11,15 15,5 21,16" fill="none" strokeLinejoin="round" strokeLinecap="round" />
+				<circle cx="3" cy="18" r="1.4" fill="white" stroke="currentColor" strokeWidth={1} />
+				<circle cx="7" cy="8" r="1.4" fill="white" stroke="currentColor" strokeWidth={1} />
+				<circle cx="11" cy="15" r="1.4" fill="white" stroke="currentColor" strokeWidth={1} />
+				<circle cx="15" cy="5" r="1.4" fill="white" stroke="currentColor" strokeWidth={1} />
+				<circle cx="21" cy="16" r="1.4" fill="white" stroke="currentColor" strokeWidth={1} />
 			</Icon>
 		),
 	},
