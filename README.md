@@ -95,7 +95,6 @@ Trading-View-Candlestick-Charting-Toolbox/
 |------|-------------|
 | Cross | Standard crosshair cursor |
 | Arrow | Default pointer cursor |
-| Demonstration | Dot cursor for presentations |
 | Eraser | Click to delete drawings |
 
 ### Trend Line Tools
@@ -141,8 +140,8 @@ Trading-View-Candlestick-Charting-Toolbox/
 |------|-------------|
 | XABCD Pattern | 5-point harmonic pattern with diagonals and fill |
 | Cypher Pattern | 5-point Cypher harmonic with diagonals and fill |
-| Head and Shoulders | 7-point reversal pattern with neckline diagonal |
-| ABCD Pattern | 4-point measured-move pattern with diagonals |
+| Head and Shoulders | 7-point reversal (green); labels: Left shoulder, Head, Right shoulder |
+| ABCD Pattern | 4-point measured-move (green); parallelogram-style leg; diagonals |
 
 ### Elliott Waves
 

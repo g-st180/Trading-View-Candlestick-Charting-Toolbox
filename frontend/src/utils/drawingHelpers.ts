@@ -185,6 +185,54 @@ export function drawRoundedRect(
 	}
 }
 
+/** Rounded badge + white text (default blue; pass badgeFill for other accents e.g. green). */
+export function drawBlueWhiteBadgeLabel(
+	ctx: CanvasRenderingContext2D,
+	text: string,
+	centerX: number,
+	centerY: number,
+	options?: {
+		font?: string;
+		isHidden?: boolean;
+		borderRadius?: number;
+		textLineHeight?: number;
+		padding?: number;
+		/** Solid fill when visible (default `#2563eb`) */
+		badgeFill?: string;
+		/** Fill when drawing is hidden (default blue translucent) */
+		badgeFillHidden?: string;
+	}
+): void {
+	const font = options?.font ?? '12px system-ui, sans-serif';
+	const isHidden = options?.isHidden ?? false;
+	const borderRadius = options?.borderRadius ?? 6;
+	const textLineHeight = options?.textLineHeight ?? 13;
+	const padding = options?.padding ?? 5;
+	const fillVisible = options?.badgeFill ?? '#2563eb';
+	const fillHidden = options?.badgeFillHidden ?? 'rgba(37, 99, 235, 0.55)';
+	ctx.save();
+	ctx.font = font;
+	const textWidth = ctx.measureText(text).width;
+	const rectWidth = textWidth + padding * 2;
+	const rectHeight = textLineHeight + padding * 2;
+	const rectX = centerX - rectWidth / 2;
+	const rectY = centerY - rectHeight / 2;
+	ctx.fillStyle = isHidden ? fillHidden : fillVisible;
+	ctx.beginPath();
+	drawRoundedRect(ctx, rectX, rectY, rectWidth, rectHeight, borderRadius);
+	ctx.fill();
+	ctx.strokeStyle = '#ffffff';
+	ctx.lineWidth = 1.5;
+	ctx.beginPath();
+	drawRoundedRect(ctx, rectX, rectY, rectWidth, rectHeight, borderRadius);
+	ctx.stroke();
+	ctx.fillStyle = '#ffffff';
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'middle';
+	ctx.fillText(text, centerX, centerY);
+	ctx.restore();
+}
+
 // ─── Geometry & Hit-Testing ─────────────────────────────────────────────────
 
 /**

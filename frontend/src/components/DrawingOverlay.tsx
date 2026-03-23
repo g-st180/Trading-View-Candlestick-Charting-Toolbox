@@ -35,9 +35,11 @@ import {
 	gannBorderColor,
 	strokeSmoothCurve,
 	drawRoundedRect,
+	drawBlueWhiteBadgeLabel,
 } from '../utils/drawingHelpers';
 import { TEXT_ANNOTATION_FONT, TEXT_PAD_PX, textBoxWidthPx } from '../utils/textAnnotation';
 import { isPatternTool, getPatternConfig } from '../utils/patternTools';
+import { TOOL_DOTTED_LINE_DASH } from '../utils/drawingLineStyle';
 
 export type { CandleBar } from '../types/drawing';
 
@@ -473,7 +475,8 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.fillRect(rectLeft, rectTop, rectRight - rectLeft, rectBottom - rectTop);
 					ctx.restore();
 					ctx.save();
-					ctx.setLineDash([4, 4]);
+					ctx.lineCap = 'round';
+					ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 					ctx.lineWidth = 0.8;
 					ctx.strokeStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : '#000000';
 					ctx.beginPath();
@@ -481,6 +484,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.lineTo(dotEndX, dotEndY);
 					ctx.stroke();
 					ctx.setLineDash([]);
+					ctx.lineCap = 'butt';
 					ctx.restore();
 				}
 				ctx.restore();
@@ -517,7 +521,8 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.fillRect(rectLeft, rectTop, rectRight - rectLeft, rectBottom - rectTop);
 					ctx.restore();
 					ctx.save();
-					ctx.setLineDash([4, 4]);
+					ctx.lineCap = 'round';
+					ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 					ctx.lineWidth = 0.8;
 					ctx.strokeStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : '#000000';
 					ctx.beginPath();
@@ -525,6 +530,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.lineTo(dotEndX, dotEndY);
 					ctx.stroke();
 					ctx.setLineDash([]);
+					ctx.lineCap = 'butt';
 					ctx.restore();
 				}
 			}
@@ -948,7 +954,8 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			}
 
 			// Dotted line from 1 to 0 (diagonal: left corner of level 1 to right corner of level 0, no arrows)
-			ctx.setLineDash([4, 4]);
+			ctx.lineCap = 'round';
+			ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 			ctx.strokeStyle = 'rgba(0,0,0,0.4)';
 			ctx.lineWidth = 1.5;
 			ctx.beginPath();
@@ -956,6 +963,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			ctx.lineTo(rightX, endY);
 			ctx.stroke();
 			ctx.setLineDash([]);
+			ctx.lineCap = 'butt';
 
 			if (isInteractive) {
 				drawHandle(leftX, startY);
@@ -1521,9 +1529,11 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			if (selected && w >= 1 && h >= 1) {
 				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
 				ctx.lineWidth = (drawing.style?.width || 2) * 0.8;
-				ctx.setLineDash([4, 4]);
+				ctx.lineCap = 'round';
+				ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 				ctx.strokeRect(left, top, w, h);
 				ctx.setLineDash([]);
+				ctx.lineCap = 'butt';
 				const handleRadius = 5;
 				ctx.fillStyle = '#ffffff';
 				ctx.strokeStyle = drawing.style?.color || '#3b82f6';
@@ -1611,12 +1621,14 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				ctx.strokeRect(leftX, top, boxW, h);
 				ctx.strokeStyle = borderColor;
 				ctx.lineWidth = 1.5;
-				ctx.setLineDash([4, 3]);
+				ctx.lineCap = 'round';
+				ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 				ctx.beginPath();
 				ctx.moveTo(leftX + boxW, top + h / 2);
 				ctx.lineTo(leftX + boxW + 40, top + h / 2);
 				ctx.stroke();
 				ctx.setLineDash([]);
+				ctx.lineCap = 'butt';
 				const priceStr = drawing.startPrice != null ? drawing.startPrice.toFixed(2) : '';
 				ctx.fillStyle = borderColor;
 				ctx.fillRect(leftX + boxW + 40, top + h / 2 - 9, ctx.measureText(priceStr).width + 8, 18);
@@ -1784,9 +1796,11 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			if (selectedOrHovered && aType !== 'text') {
 				ctx.strokeStyle = borderColor;
 				ctx.lineWidth = 1;
-				ctx.setLineDash([4, 3]);
+				ctx.lineCap = 'round';
+				ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 				ctx.strokeRect(leftX - 2, top - 2, boxW + 4, h + 4);
 				ctx.setLineDash([]);
+				ctx.lineCap = 'butt';
 			}
 			ctx.restore();
 			return;
@@ -1814,8 +1828,13 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				if (lx != null && ly != null) screenPts.push({ x: Number(lx), y: ly });
 			}
 			if (screenPts.length < 1) return;
-			const color = drawing.style?.color || '#2563eb';
+			const isHidden = !!drawing.hidden;
+			const isGreenPattern = drawing.type === 'head-and-shoulders' || drawing.type === 'abcd';
+			const color = drawing.style?.color || (isGreenPattern ? '#16a34a' : '#2563eb');
 			const lw = drawing.style?.width || 2;
+			const badgeOpts = isGreenPattern
+				? { badgeFill: '#16a34a' as const, badgeFillHidden: 'rgba(22, 163, 74, 0.55)' as const }
+				: {};
 			ctx.save();
 			ctx.beginPath();
 			ctx.rect(0, 0, plotWidth || container.getBoundingClientRect().width, container.getBoundingClientRect().height);
@@ -1830,9 +1849,11 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			for (let i = 1; i < screenPts.length; i++) ctx.lineTo(screenPts[i].x, screenPts[i].y);
 			ctx.stroke();
 
-			// Dashed diagonals
+			// Dashed diagonals (dense dots)
 			if (cfg.diagonals) {
-				ctx.setLineDash([6, 4]);
+				ctx.save();
+				ctx.lineCap = 'round';
+				ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 				ctx.lineWidth = 1;
 				ctx.globalAlpha = 0.5;
 				for (const [a, b] of cfg.diagonals) {
@@ -1843,37 +1864,50 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 						ctx.stroke();
 					}
 				}
-				ctx.globalAlpha = 1;
-				ctx.setLineDash([]);
+				ctx.restore();
 			}
 
-			// Filled polygon when complete
+			// Filled region when complete — same blue + opacity as rectangle tool (59,130,246; 0.18 in progress / 0.25 done)
 			if (cfg.fill && screenPts.length >= cfg.points) {
-				ctx.beginPath();
-				ctx.moveTo(screenPts[0].x, screenPts[0].y);
-				for (let i = 1; i < cfg.points; i++) ctx.lineTo(screenPts[i].x, screenPts[i].y);
-				ctx.closePath();
-				ctx.fillStyle = color;
-				ctx.globalAlpha = 0.08;
-				ctx.fill();
-				ctx.globalAlpha = 1;
+				const fillOpacity = isInProgress ? 0.18 : 0.25;
+				ctx.fillStyle = `rgba(59, 130, 246, ${fillOpacity})`;
+				if (cfg.fillTriangles && cfg.fillTriangles.length > 0) {
+					for (const tri of cfg.fillTriangles) {
+						const [i0, i1, i2] = tri;
+						if (i0 < screenPts.length && i1 < screenPts.length && i2 < screenPts.length) {
+							ctx.beginPath();
+							ctx.moveTo(screenPts[i0].x, screenPts[i0].y);
+							ctx.lineTo(screenPts[i1].x, screenPts[i1].y);
+							ctx.lineTo(screenPts[i2].x, screenPts[i2].y);
+							ctx.closePath();
+							ctx.fill();
+						}
+					}
+				} else {
+					ctx.beginPath();
+					ctx.moveTo(screenPts[0].x, screenPts[0].y);
+					for (let i = 1; i < cfg.points; i++) ctx.lineTo(screenPts[i].x, screenPts[i].y);
+					ctx.closePath();
+					ctx.fill();
+				}
 			}
 
-			// Labels
-			ctx.font = 'bold 12px system-ui, sans-serif';
-			ctx.textAlign = 'center';
+			// Labels — badge + white text (green theme for head-and-shoulders + ABCD)
 			for (let i = 0; i < Math.min(screenPts.length, cfg.labels.length); i++) {
+				const lab = cfg.labels[i]?.trim();
+				if (!lab) continue;
 				const above = i % 2 === 1;
-				ctx.fillStyle = color;
-				ctx.textBaseline = above ? 'bottom' : 'top';
-				ctx.fillText(cfg.labels[i], screenPts[i].x, screenPts[i].y + (above ? -10 : 10));
+				const lx = screenPts[i].x;
+				const ly = screenPts[i].y + (above ? -14 : 14);
+				drawBlueWhiteBadgeLabel(ctx, lab, lx, ly, {
+					font: '12px system-ui, sans-serif',
+					isHidden,
+					...badgeOpts,
+				});
 			}
 
 			// Fibonacci ratios on diagonals (only for harmonic patterns with diagonals)
 			if (cfg.diagonals && screenPts.length >= 3) {
-				ctx.fillStyle = '#64748b';
-				ctx.font = '11px system-ui, sans-serif';
-				ctx.textBaseline = 'middle';
 				for (const [a, b] of cfg.diagonals) {
 					if (a >= screenPts.length || b >= screenPts.length) continue;
 					const refA = a === 0 && screenPts.length > 1 ? 1 : (a > 0 ? a - 1 : 0);
@@ -1881,7 +1915,14 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					const base = Math.abs(screenPts[refA].y - screenPts[a].y);
 					if (base > 0) {
 						const ratio = (move / base).toFixed(3);
-						ctx.fillText(ratio, (screenPts[a].x + screenPts[b].x) / 2, (screenPts[a].y + screenPts[b].y) / 2);
+						const mx = (screenPts[a].x + screenPts[b].x) / 2;
+						const my = (screenPts[a].y + screenPts[b].y) / 2;
+						drawBlueWhiteBadgeLabel(ctx, ratio, mx, my, {
+							font: '11px system-ui, sans-serif',
+							isHidden,
+							textLineHeight: 12,
+							...badgeOpts,
+						});
 					}
 				}
 			}
@@ -3202,7 +3243,8 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.save();
 					ctx.strokeStyle = lineColor;
 					ctx.lineWidth = lineWidth * 0.5;
-					ctx.setLineDash([4, 8]);
+					ctx.lineCap = 'round';
+					ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 					ctx.beginPath();
 					const midStartX = (start1.x + start2.x) / 2;
 					const midStartY = (start1.y + start2.y) / 2;
@@ -3212,6 +3254,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.lineTo(midEndX, midEndY);
 					ctx.stroke();
 					ctx.setLineDash([]);
+					ctx.lineCap = 'butt';
 					ctx.restore();
 					ctx.restore();
 					ctx.restore();
@@ -3256,11 +3299,12 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.stroke();
 					ctx.restore();
 
-					// Draw dashed middle line
+					// Draw dashed middle line (dense dots)
 					ctx.save();
 					ctx.strokeStyle = lineColor;
 					ctx.lineWidth = lineWidth * 0.5;
-					ctx.setLineDash([4, 8]);
+					ctx.lineCap = 'round';
+					ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 					ctx.beginPath();
 					const midStartX = (start1.x + start2.x) / 2;
 					const midStartY = (start1.y + start2.y) / 2;
@@ -3270,6 +3314,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.lineTo(midEndX, midEndY);
 					ctx.stroke();
 					ctx.setLineDash([]);
+					ctx.lineCap = 'butt';
 					ctx.restore();
 				}
 

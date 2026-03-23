@@ -1129,7 +1129,10 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
                     id: drawingId,
                     type: tool,
                     points: [{ time, price }],
-                    style: { color: '#2563eb', width: 2 },
+                    style: {
+                        color: tool === 'head-and-shoulders' || tool === 'abcd' ? '#16a34a' : '#2563eb',
+                        width: 2,
+                    },
                 };
                 addDrawingRefFn.current(patternDrawing);
                 patternInProgressRef.current = drawingId;
@@ -5215,8 +5218,6 @@ export default function CandlestickChart({ height = 600, crosshairType = 'hoveri
         } else if (crosshairType === 'dot' || crosshairType === 'cross') {
             cursorStyle = 'crosshair';
         } else if (crosshairType === 'arrow') {
-            cursorStyle = 'default';
-        } else if (crosshairType === 'demonstration') {
             cursorStyle = 'default';
         } else if (crosshairType === 'eraser') {
             cursorStyle = 'grab';

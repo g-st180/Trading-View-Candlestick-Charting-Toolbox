@@ -23,6 +23,7 @@ import type {
 import type { Drawing } from '../types/drawing';
 import type { CandleBar } from '../types/drawing';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
+import { TOOL_DOTTED_LINE_DASH } from '../utils/drawingLineStyle';
 
 export type { CandleBar };
 
@@ -253,15 +254,17 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 			ctx.fillRect(rectLeft, rectTop, rectRight - rectLeft, rectBottom - rectTop);
 			ctx.restore();
 			ctx.save();
-			ctx.setLineDash([4, 4]);
+			ctx.lineCap = 'round';
+			ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 			ctx.lineWidth = 0.8;
 			ctx.strokeStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : '#000000';
 			ctx.beginPath();
 			ctx.moveTo(dsx, dotStartY);
 			ctx.lineTo(dex, dotEndY);
-		ctx.stroke();
-		ctx.setLineDash([]);
-		ctx.restore();
+			ctx.stroke();
+			ctx.setLineDash([]);
+			ctx.lineCap = 'butt';
+			ctx.restore();
 		}
 	}
 
@@ -380,7 +383,8 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 			ctx.fillRect(rectLeft, rectTop, rectRight - rectLeft, rectBottom - rectTop);
 			ctx.restore();
 			ctx.save();
-			ctx.setLineDash([4, 4]);
+			ctx.lineCap = 'round';
+			ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 			ctx.lineWidth = 0.8;
 			ctx.strokeStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : '#000000';
 			ctx.beginPath();
@@ -388,6 +392,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 			ctx.lineTo(dex, dotEndY);
 			ctx.stroke();
 			ctx.setLineDash([]);
+			ctx.lineCap = 'butt';
 			ctx.restore();
 		}
 	}
@@ -446,12 +451,14 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 			ctx.save();
 			ctx.strokeStyle = lineColor;
 			ctx.lineWidth = lineWidth * 0.5;
-			ctx.setLineDash([4, 8]);
+			ctx.lineCap = 'round';
+			ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 			ctx.beginPath();
 			ctx.moveTo((start1.x + start2.x) / 2, (start1.y + start2.y) / 2);
 			ctx.lineTo((end1.x + end2.x) / 2, (end1.y + end2.y) / 2);
 			ctx.stroke();
 			ctx.setLineDash([]);
+			ctx.lineCap = 'butt';
 			ctx.restore();
 		} else {
 			const [start, end] = parallelScreenPoints;
@@ -823,7 +830,8 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		// Dotted line from 1 to 0 (diagonal: left corner level 1 to right corner level 0)
 		ctx.save();
 		ctx.globalAlpha = opacity;
-		ctx.setLineDash([4, 4]);
+		ctx.lineCap = 'round';
+		ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
 		ctx.strokeStyle = 'rgba(0,0,0,0.4)';
 		ctx.lineWidth = 1.5;
 		ctx.beginPath();
@@ -831,6 +839,7 @@ export class DrawingsUnderlayPrimitive implements ISeriesPrimitive<unknown> {
 		ctx.lineTo(rightX, endY);
 		ctx.stroke();
 		ctx.setLineDash([]);
+		ctx.lineCap = 'butt';
 		ctx.restore();
 	}
 

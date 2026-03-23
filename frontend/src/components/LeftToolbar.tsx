@@ -12,7 +12,7 @@
  * and automatically returns to crosshair mode when a tool finishes.
  *
  * Tool categories and their sub-tools:
- *   - Crosshair: cross, arrow, demonstration, eraser
+ *   - Crosshair: cross, arrow, eraser
  *   - Lines: trend line, info line, ray, horizontal line/ray, parallel channel
  *   - Projection: long position, short position, price/date/date-price range
  *   - Shapes: brush, arrows (4 types), rectangle, path, circle, curve
@@ -62,7 +62,62 @@ function Icon({
 
 const ICON_SW = 1.05;
 const BUBBLE_SW = 0.95;
+const BUBBLE_R = 1.6; // match trend-line / fib-style endpoint dots in 24×24 icons
+const CYPHER_C_FONT = 5.5 * 1.15; // "C" under middle bubble (chart pattern icon)
 const CHEVRON_SW = 1.05;
+
+/** Three peaks, center highest — head & shoulders; shoulders up; corner bubbles below y=17 anchors. */
+function HeadShouldersPatternIcon({
+	className = 'h-7 w-7',
+	strokeWidth = ICON_SW,
+}: {
+	className?: string;
+	strokeWidth?: number;
+}) {
+	// Corner bubbles at y=20; inner anchors at y=17; top head y=5 → span 15 (same as Fib icon).
+	const neckY = 17;
+	return (
+		<Icon className={className} strokeWidth={strokeWidth}>
+			<polyline
+				points={`3,20 3,${neckY} 6,9 8.5,16 12,5 15.5,16 18,9 21,${neckY} 21,20`}
+				fill="none"
+				strokeLinejoin="round"
+				strokeLinecap="round"
+			/>
+			<circle cx="3" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="6" cy="9" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="8.5" cy="16" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="12" cy="5" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="15.5" cy="16" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="18" cy="9" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="21" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+		</Icon>
+	);
+}
+
+/** ABCD measured move: slanted parallelogram (four corners A→B→C→D), distinct from harmonic zigzag. */
+function AbcdPatternIcon({
+	className = 'h-7 w-7',
+	strokeWidth = ICON_SW,
+}: {
+	className?: string;
+	strokeWidth?: number;
+}) {
+	return (
+		<Icon className={className} strokeWidth={strokeWidth}>
+			<polygon
+				points="4,18 17,18 20.5,7.5 7.5,7.5"
+				fill="none"
+				strokeLinejoin="round"
+				strokeLinecap="round"
+			/>
+			<circle cx="4" cy="18" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="17" cy="18" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="20.5" cy="7.5" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="7.5" cy="7.5" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+		</Icon>
+	);
+}
 
 const topTools: ToolButton[] = [
 	{
@@ -82,9 +137,10 @@ const topTools: ToolButton[] = [
 		label: 'Trend Line Tools',
 		icon: (
 			<Icon strokeWidth={ICON_SW}>
-				<path d="M5 19L19 5" />
-				<circle cx="5" cy="19" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-				<circle cx="19" cy="5" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				{/* Same diagonal extent + bubble placement as trend line / info line in flyout */}
+				<path d="M4 20L20 4" />
+				<circle cx="4" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="20" cy="4" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			</Icon>
 		),
 	},
@@ -98,8 +154,8 @@ const topTools: ToolButton[] = [
 				<path d="M4 15h16" />
 				<path d="M4 20h16" />
 				<path d="M4 20L20 5" strokeDasharray="3 2" strokeWidth={0.75} />
-				<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-				<circle cx="20" cy="5" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="4" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="20" cy="5" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			</Icon>
 		),
 	},
@@ -117,12 +173,14 @@ const topTools: ToolButton[] = [
 		label: 'Patterns',
 		icon: (
 			<Icon strokeWidth={ICON_SW}>
-				<polyline points="3,18 7,8 11,15 15,5 21,16" fill="none" strokeLinejoin="round" strokeLinecap="round" />
-				<circle cx="3" cy="18" r="1.4" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-				<circle cx="7" cy="8" r="1.4" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-				<circle cx="11" cy="15" r="1.4" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-				<circle cx="15" cy="5" r="1.4" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-				<circle cx="21" cy="16" r="1.4" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				{/* Bottom corners at y=20: vertical gap 5 from middle (y=15), same as Fibonacci line spacing */}
+				<path d="M3 20L11 15M21 20L11 15" fill="none" />
+				<polyline points="3,20 7,8 11,15 15,5 21,20" fill="none" strokeLinejoin="round" strokeLinecap="round" />
+				<circle cx="3" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="7" cy="8" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="11" cy="15" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="15" cy="5" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+				<circle cx="21" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			</Icon>
 		),
 	},
@@ -334,7 +392,6 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 	const crosshairMenuItems = [
 		{ id: 'cross', label: 'Cross', icon: 'cross' },
 		{ id: 'arrow', label: 'Arrow', icon: 'arrow' },
-		{ id: 'demonstration', label: 'Demonstration', icon: 'demonstration' },
 		{ id: 'eraser', label: 'Eraser', icon: 'eraser' },
 	];
 
@@ -474,7 +531,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 			);
 		}
 
-		// Crosshair button with flyout for cross, arrow, demonstration, eraser
+		// Crosshair button with flyout for cross, arrow, eraser
 		if (tool.id === 'crosshair') {
 			return (
 				<div
@@ -562,13 +619,6 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 													<path d="M4 12h16" />
 												</Icon>
 											)}
-											{item.icon === 'demonstration' && (
-												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW}>
-													<circle cx="12" cy="12" r="10" />
-													<path d="M8 8l8 4-8 4V8z" />
-													<path d="M8 8l4 4" />
-												</Icon>
-											)}
 											{item.icon === 'eraser' && (
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW}>
 													<path d="M7 18l-4-4 8-8 4 4-8 8z" />
@@ -630,10 +680,10 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 								<path d="M4 14H20" stroke="currentColor" strokeLinecap="round" />
 								<path d="M4 20H20" stroke="currentColor" strokeLinecap="round" />
 								<path d="M4 14L20 4" stroke="currentColor" strokeDasharray="1.2 2.4" strokeLinecap="round" />
-								<circle cx="4" cy="14" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-								<circle cx="20" cy="14" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-								<circle cx="4" cy="4" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-								<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="4" cy="14" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="20" cy="14" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="4" cy="4" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="4" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 							</Icon>
 						) : selectedProjectionType === 'short-position' ? (
 							<Icon className="h-7 w-7" strokeWidth={ICON_SW}>
@@ -641,10 +691,10 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 								<path d="M4 10H20" stroke="currentColor" strokeLinecap="round" />
 								<path d="M4 20H20" stroke="currentColor" strokeLinecap="round" />
 								<path d="M4 10L20 20" stroke="currentColor" strokeDasharray="1.2 2.4" strokeLinecap="round" />
-								<circle cx="4" cy="10" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-								<circle cx="20" cy="10" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-								<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-								<circle cx="4" cy="4" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="4" cy="10" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="20" cy="10" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="4" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="4" cy="4" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 							</Icon>
 						) : selectedProjectionType === 'price-range' ? (
 							<Icon className="h-7 w-7" strokeWidth={ICON_SW}>
@@ -715,10 +765,10 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 													<path d="M4 14H20" stroke="currentColor" strokeLinecap="round" />
 													<path d="M4 20H20" stroke="currentColor" strokeLinecap="round" />
 													<path d="M4 14L20 4" stroke="currentColor" strokeDasharray="1.2 2.4" strokeLinecap="round" />
-													<circle cx="4" cy="14" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-													<circle cx="20" cy="14" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-													<circle cx="4" cy="4" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-													<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="4" cy="14" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="20" cy="14" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="4" cy="4" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="4" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 												</Icon>
 											)}
 											{item.icon === 'short-position' && (
@@ -727,10 +777,10 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 													<path d="M4 10H20" stroke="currentColor" strokeLinecap="round" />
 													<path d="M4 20H20" stroke="currentColor" strokeLinecap="round" />
 													<path d="M4 10L20 20" stroke="currentColor" strokeDasharray="1.2 2.4" strokeLinecap="round" />
-													<circle cx="4" cy="10" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-													<circle cx="20" cy="10" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-													<circle cx="4" cy="20" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-													<circle cx="4" cy="4" r="1.5" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="4" cy="10" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="20" cy="10" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="4" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="4" cy="4" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 												</Icon>
 											)}
 											{item.label}
@@ -843,7 +893,36 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							setShowPatternsMenu((v) => !v);
 						}}
 					>
-						{tool.icon}
+						{selectedPatternsType === 'cypher' ? (
+							<Icon strokeWidth={ICON_SW}>
+								<path d="M3 20L11 15M21 20L11 15" fill="none" />
+								<polyline points="3,20 7,8 11,15 15,5 21,20" fill="none" strokeLinejoin="round" strokeLinecap="round" />
+								<circle cx="3" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="7" cy="8" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="11" cy="15" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="15" cy="5" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<circle cx="21" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+								<text
+									x="11"
+									y="17.65"
+									dominantBaseline="hanging"
+									textAnchor="middle"
+									fill="currentColor"
+									stroke="none"
+									fontSize={CYPHER_C_FONT}
+									fontWeight="700"
+									fontFamily="system-ui, -apple-system, sans-serif"
+								>
+									C
+								</text>
+							</Icon>
+						) : selectedPatternsType === 'head-and-shoulders' ? (
+							<HeadShouldersPatternIcon className="h-7 w-7" strokeWidth={ICON_SW} />
+						) : selectedPatternsType === 'abcd' ? (
+							<AbcdPatternIcon className="h-7 w-7" strokeWidth={ICON_SW} />
+						) : (
+							tool.icon
+						)}
 					</button>
 					{showPatternsMenu && (
 						<div className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[300px] z-50 max-h-[80vh] overflow-y-auto">
@@ -870,14 +949,42 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										].join(' ')}
 									>
 										<span className="flex items-center gap-2 whitespace-nowrap">
-											<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW}>
-												<polyline points="3,18 7,8 11,14 15,6 19,16" fill="none" stroke="currentColor" strokeWidth="1.05" strokeLinejoin="round" strokeLinecap="round" />
-												<circle cx="3" cy="18" r="1.4" fill="white" stroke="currentColor" />
-												<circle cx="7" cy="8" r="1.4" fill="white" stroke="currentColor" />
-												<circle cx="11" cy="14" r="1.4" fill="white" stroke="currentColor" />
-												<circle cx="15" cy="6" r="1.4" fill="white" stroke="currentColor" />
-												<circle cx="19" cy="16" r="1.4" fill="white" stroke="currentColor" />
-											</Icon>
+											{item.id === 'head-and-shoulders' ? (
+												<HeadShouldersPatternIcon
+													className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`}
+													strokeWidth={ICON_SW}
+												/>
+											) : item.id === 'abcd' ? (
+												<AbcdPatternIcon
+													className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`}
+													strokeWidth={ICON_SW}
+												/>
+											) : (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW}>
+													<path d="M3 20L11 15M19 20L11 15" fill="none" />
+													<polyline points="3,20 7,8 11,15 15,6 19,20" fill="none" stroke="currentColor" strokeWidth="1.05" strokeLinejoin="round" strokeLinecap="round" />
+													<circle cx="3" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="7" cy="8" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="11" cy="15" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="15" cy="6" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													<circle cx="19" cy="20" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+													{item.id === 'cypher' && (
+														<text
+															x="11"
+															y="17.65"
+															dominantBaseline="hanging"
+															textAnchor="middle"
+															fill="currentColor"
+															stroke="none"
+															fontSize={CYPHER_C_FONT}
+															fontWeight="700"
+															fontFamily="system-ui, -apple-system, sans-serif"
+														>
+															C
+														</text>
+													)}
+												</Icon>
+											)}
 											{item.label}
 										</span>
 										{(isSelected || isHovered) && (
@@ -1331,7 +1438,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							</Icon>
 						) : selectedLinesType === 'ray' ? (
 							<Icon>
-								<path d="M5 19L19 5" />
+								<path d="M4 20L20 4" />
 								<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 								<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 							</Icon>
@@ -1343,7 +1450,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							</Icon>
 						) : selectedLinesType === 'info-line' ? (
 							<Icon>
-								<path d="M5 19L19 5" />
+								<path d="M4 20L20 4" />
 								<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 								<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 								<rect x="8" y="10" width="8" height="5" rx="1" fill="currentColor" opacity={0.25} stroke="currentColor" strokeWidth={0.8} />
@@ -1387,14 +1494,14 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										<span className="flex items-center gap-2 whitespace-nowrap">
 											{item.icon === 'ray' && (
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW}>
-													<path d="M5 19L19 5" />
+													<path d="M4 20L20 4" />
 													<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 													<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 												</Icon>
 											)}
 											{item.icon === 'info-line' && (
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW}>
-													<path d="M5 19L19 5" />
+													<path d="M4 20L20 4" />
 													<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 													<circle cx="20" cy="4" r="1.6" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 													<rect x="8" y="10" width="8" height="5" rx="1" fill="currentColor" opacity={0.25} stroke="currentColor" strokeWidth={0.8} />
@@ -1402,7 +1509,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 											)}
 											{item.icon === 'ray-line' && (
 												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW}>
-													<path d="M5 19L19 5" />
+													<path d="M4 20L20 4" />
 													<circle cx="4" cy="20" r="1.6" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 													<circle cx="12" cy="12" r="1.6" fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 												</Icon>

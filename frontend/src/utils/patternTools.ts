@@ -10,14 +10,33 @@ export interface PatternConfig {
 	labels: string[];
 	/** Pairs of point indices for dashed diagonal lines (e.g. [0,2] = line from pt0 to pt2) */
 	diagonals?: [number, number][];
-	/** If true, fill the polygon when complete */
+	/** If true, fill when complete (see fillTriangles for shape) */
 	fill?: boolean;
+	/** Optional triangles (vertex indices) to fill instead of one closed N-gon — e.g. XAB + BCD for XABCD */
+	fillTriangles?: [number, number, number][];
 }
 
 export const PATTERN_TOOLS: Record<string, PatternConfig> = {
-	xabcd:                 { points: 5, labels: ['X', 'A', 'B', 'C', 'D'], diagonals: [[0, 2], [1, 3], [0, 4]], fill: true },
-	cypher:                { points: 5, labels: ['X', 'A', 'B', 'C', 'D'], diagonals: [[0, 2], [1, 3], [0, 4]], fill: true },
-	'head-and-shoulders':  { points: 7, labels: ['1', '2', '3', '4', '5', '6', '7'], diagonals: [[2, 4]], fill: false },
+	xabcd: {
+		points: 5,
+		labels: ['X', 'A', 'B', 'C', 'D'],
+		diagonals: [[0, 2], [1, 3], [0, 4], [2, 4]],
+		fill: true,
+		fillTriangles: [[0, 1, 2], [2, 3, 4]],
+	},
+	cypher: {
+		points: 5,
+		labels: ['X', 'A', 'B', 'C', 'D'],
+		diagonals: [[0, 2], [1, 3], [0, 4], [2, 4]],
+		fill: true,
+		fillTriangles: [[0, 1, 2], [2, 3, 4]],
+	},
+	'head-and-shoulders': {
+		points: 7,
+		labels: ['', 'Left shoulder', '', 'Head', '', 'Right shoulder', ''],
+		diagonals: [[2, 4]],
+		fill: false,
+	},
 	abcd:                  { points: 4, labels: ['A', 'B', 'C', 'D'], diagonals: [[0, 2], [1, 3]], fill: false },
 	'elliott-impulse':     { points: 6, labels: ['0', '1', '2', '3', '4', '5'], fill: false },
 	'elliott-correction':  { points: 4, labels: ['0', 'A', 'B', 'C'], fill: false },
