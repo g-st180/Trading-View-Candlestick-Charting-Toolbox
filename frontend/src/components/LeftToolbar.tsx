@@ -106,15 +106,16 @@ function AbcdPatternIcon({
 	return (
 		<Icon className={className} strokeWidth={strokeWidth}>
 			<polygon
-				points="4,18 17,18 20.5,7.5 7.5,7.5"
+				points="3,19 18.5,19 21,5.5 5.5,5.5"
 				fill="none"
 				strokeLinejoin="round"
 				strokeLinecap="round"
 			/>
-			<circle cx="4" cy="18" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-			<circle cx="17" cy="18" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-			<circle cx="20.5" cy="7.5" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-			<circle cx="7.5" cy="7.5" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<path d="M3 19L21 5.5" />
+			<circle cx="3" cy="19" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="18.5" cy="19" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="21" cy="5.5" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="5.5" cy="5.5" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 		</Icon>
 	);
 }
