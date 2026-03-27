@@ -1829,7 +1829,8 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			}
 			if (screenPts.length < 1) return;
 			const isHidden = !!drawing.hidden;
-			const isGreenPattern = drawing.type === 'head-and-shoulders' || drawing.type === 'abcd';
+			const isHeadShoulders = drawing.type === 'head-and-shoulders';
+			const isGreenPattern = isHeadShoulders || drawing.type === 'abcd';
 			const color = drawing.style?.color || (isGreenPattern ? '#16a34a' : '#2563eb');
 			const lw = drawing.style?.width || 2;
 			const badgeOpts = isGreenPattern
@@ -1849,7 +1850,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			for (let i = 1; i < screenPts.length; i++) ctx.lineTo(screenPts[i].x, screenPts[i].y);
 			ctx.stroke();
 
-			// Dashed diagonals (dense dots)
+			// Dashed diagonals (dense dots). For head-and-shoulders, extend the neckline across the full pane.
 			if (cfg.diagonals) {
 				ctx.save();
 				ctx.lineCap = 'round';
@@ -1858,13 +1859,73 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				ctx.globalAlpha = 0.5;
 				for (const [a, b] of cfg.diagonals) {
 					if (a < screenPts.length && b < screenPts.length) {
+						const pa = screenPts[a];
+						const pb = screenPts[b];
 						ctx.beginPath();
-						ctx.moveTo(screenPts[a].x, screenPts[a].y);
-						ctx.lineTo(screenPts[b].x, screenPts[b].y);
+						if (isHeadShoulders && a === 2 && b === 4) {
+							const paneW = plotWidth || container.getBoundingClientRect().width;
+							const paneH = container.getBoundingClientRect().height;
+							const dx = pb.x - pa.x;
+							const dy = pb.y - pa.y;
+							if (Math.abs(dx) < 0.0001) {
+								ctx.moveTo(pa.x, 0);
+								ctx.lineTo(pa.x, paneH);
+							} else {
+								const yAt = (x: number) => pa.y + ((x - pa.x) * dy) / dx;
+								ctx.moveTo(0, yAt(0));
+								ctx.lineTo(paneW, yAt(paneW));
+							}
+						} else {
+							ctx.moveTo(pa.x, pa.y);
+							ctx.lineTo(pb.x, pb.y);
+						}
 						ctx.stroke();
 					}
 				}
 				ctx.restore();
+			}
+
+			// Head-and-shoulders: fade triangle = shoulder-top + middle neckline bubble + crossing corner bubble.
+			if (isHeadShoulders && screenPts.length >= 6) {
+				const p2 = screenPts[2];
+				const p4 = screenPts[4];
+				const dx = p4.x - p2.x;
+				const dy = p4.y - p2.y;
+				if (Math.abs(dx) > 0.0001) {
+					const yOnNeckline = (x: number) => p2.y + ((x - p2.x) * dy) / dx;
+					const fillOpacity = isInProgress ? 0.18 : 0.25;
+					const [r, g, b] = isGreenPattern ? [22, 163, 74] : [59, 130, 246];
+					ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${fillOpacity})`;
+					const shoulderTriangles: Array<{ corner: { x: number; y: number }; middle: { x: number; y: number }; top: { x: number; y: number } }> = [
+						// Left side: crossing corner=0, middle neckline=2, shoulder top=1.
+						{ corner: screenPts[0], middle: screenPts[2], top: screenPts[1] },
+						// Right side: crossing corner=6, middle neckline=4, shoulder top=5.
+						{ corner: screenPts[6], middle: screenPts[4], top: screenPts[5] },
+					];
+					for (const { corner, middle, top } of shoulderTriangles) {
+						const yLine = yOnNeckline(corner.x);
+						// Trigger when corner crosses downward below neckline (canvas Y grows downward).
+						if (corner.y > yLine + 0.5) {
+							// Use the true intersection of (top -> corner) with extended neckline.
+							// This keeps the fade inside the same wedge instead of sliding outward with corner x drift.
+							const r = { x: corner.x - top.x, y: corner.y - top.y };
+							const s = { x: p4.x - p2.x, y: p4.y - p2.y };
+							const denom = r.x * s.y - r.y * s.x;
+							if (Math.abs(denom) < 0.0001) continue;
+							const qp = { x: p2.x - top.x, y: p2.y - top.y };
+							const t = (qp.x * s.y - qp.y * s.x) / denom;
+							const cut = { x: top.x + t * r.x, y: top.y + t * r.y };
+
+							ctx.beginPath();
+							ctx.moveTo(top.x, top.y);
+							ctx.lineTo(middle.x, middle.y);
+							// Stop fade at the shoulder-edge/neckline cut point.
+							ctx.lineTo(cut.x, cut.y);
+							ctx.closePath();
+							ctx.fill();
+						}
+					}
+				}
 			}
 
 			// Filled region when complete — same blue + opacity as rectangle tool (59,130,246; 0.18 in progress / 0.25 done)
@@ -1907,7 +1968,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 			}
 
 			// Fibonacci ratios on diagonals (only for harmonic patterns with diagonals)
-			if (cfg.diagonals && screenPts.length >= 3) {
+			if (!isHeadShoulders && cfg.diagonals && screenPts.length >= 3) {
 				for (const [a, b] of cfg.diagonals) {
 					if (a >= screenPts.length || b >= screenPts.length) continue;
 					const refA = a === 0 && screenPts.length > 1 ? 1 : (a > 0 ? a - 1 : 0);
