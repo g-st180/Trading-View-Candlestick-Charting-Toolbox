@@ -475,8 +475,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.fillRect(rectLeft, rectTop, rectRight - rectLeft, rectBottom - rectTop);
 					ctx.restore();
 					ctx.save();
-					ctx.lineCap = 'round';
-					ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
+					ctx.setLineDash([4, 4]);
 					ctx.lineWidth = 0.8;
 					ctx.strokeStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : '#000000';
 					ctx.beginPath();
@@ -484,7 +483,6 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.lineTo(dotEndX, dotEndY);
 					ctx.stroke();
 					ctx.setLineDash([]);
-					ctx.lineCap = 'butt';
 					ctx.restore();
 				}
 				ctx.restore();
@@ -521,8 +519,7 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.fillRect(rectLeft, rectTop, rectRight - rectLeft, rectBottom - rectTop);
 					ctx.restore();
 					ctx.save();
-					ctx.lineCap = 'round';
-					ctx.setLineDash(TOOL_DOTTED_LINE_DASH);
+					ctx.setLineDash([4, 4]);
 					ctx.lineWidth = 0.8;
 					ctx.strokeStyle = isHidden ? 'rgba(0, 0, 0, 0.5)' : '#000000';
 					ctx.beginPath();
@@ -530,7 +527,6 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 					ctx.lineTo(dotEndX, dotEndY);
 					ctx.stroke();
 					ctx.setLineDash([]);
-					ctx.lineCap = 'butt';
 					ctx.restore();
 				}
 			}

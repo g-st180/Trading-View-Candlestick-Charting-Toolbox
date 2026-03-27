@@ -142,8 +142,8 @@ function ElliottImpulseIcon({
 			<circle cx="8.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			<circle cx="15.6" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			<circle cx="21.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">1</text>
-			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">5</text>
+			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.4" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">1</text>
+			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.4" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">5</text>
 		</Icon>
 	);
 }
@@ -170,8 +170,8 @@ function ElliottCorrectionIcon({
 			<circle cx="8.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			<circle cx="15.6" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			<circle cx="21.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.0" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">A</text>
-			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.0" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">C</text>
+			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">A</text>
+			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">C</text>
 		</Icon>
 	);
 }
@@ -198,8 +198,8 @@ function ElliottTriangleIcon({
 			<circle cx="8.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			<circle cx="15.6" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			<circle cx="21.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">A</text>
-			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">E</text>
+			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.4" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">A</text>
+			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.4" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">E</text>
 		</Icon>
 	);
 }
@@ -226,8 +226,8 @@ function ElliottDoubleComboIcon({
 			<circle cx="8.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			<circle cx="15.6" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			<circle cx="21.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">W</text>
-			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">Y</text>
+			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.4" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">W</text>
+			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.4" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">Y</text>
 		</Icon>
 	);
 }
@@ -254,8 +254,8 @@ function ElliottTripleComboIcon({
 			<circle cx="8.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			<circle cx="15.6" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
 			<circle cx="21.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
-			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">W</text>
-			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">Z</text>
+			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.4" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">W</text>
+			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.4" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">Z</text>
 		</Icon>
 	);
 }
@@ -1813,8 +1813,8 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 						{tool.icon}
 					</button>
 					{showAnnotationMenu && (
-						<div className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[280px] z-50">
-							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
+						<div className="absolute left-full ml-2 top-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[280px] z-50 font-sans">
+							<div className="px-3 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 font-sans">
 								Annotation
 							</div>
 							{annotationMenuItems.map((item) => {
@@ -1834,7 +1834,7 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										onMouseEnter={() => setHoveredAnnotationItemId(item.id)}
 										onMouseLeave={() => setHoveredAnnotationItemId(null)}
 										className={[
-											'w-full px-3 py-2 text-left text-sm flex items-center justify-between transition-colors',
+											'w-full px-3 py-2 text-left text-sm font-sans flex items-center justify-between transition-colors',
 											isSelected ? 'bg-slate-700 text-white' : 'text-slate-900 hover:bg-transparent',
 										].join(' ')}
 									>
