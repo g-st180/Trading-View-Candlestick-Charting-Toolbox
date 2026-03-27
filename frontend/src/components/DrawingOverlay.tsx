@@ -1953,18 +1953,27 @@ export default function DrawingOverlay({ chart, series, containerRef, underlayIs
 				}
 			}
 
-			// Labels — badge + white text (green theme for head-and-shoulders + ABCD)
+			const isElliott = (drawing.type as string).startsWith('elliott-');
+			// Labels — Elliott uses plain blue text "(1)"; others use badge + white text.
 			for (let i = 0; i < Math.min(screenPts.length, cfg.labels.length); i++) {
 				const lab = cfg.labels[i]?.trim();
 				if (!lab) continue;
 				const above = i % 2 === 1;
 				const lx = screenPts[i].x;
 				const ly = screenPts[i].y + (above ? -14 : 14);
-				drawBlueWhiteBadgeLabel(ctx, lab, lx, ly, {
-					font: '12px system-ui, sans-serif',
-					isHidden,
-					...badgeOpts,
-				});
+				if (isElliott) {
+					ctx.fillStyle = '#2563eb';
+					ctx.font = '14px system-ui, sans-serif';
+					ctx.textAlign = 'center';
+					ctx.textBaseline = above ? 'bottom' : 'top';
+					ctx.fillText(lab, lx, ly);
+				} else {
+					drawBlueWhiteBadgeLabel(ctx, lab, lx, ly, {
+						font: '12px system-ui, sans-serif',
+						isHidden,
+						...badgeOpts,
+					});
+				}
 			}
 
 			// Fibonacci ratios on diagonals (only for harmonic patterns with diagonals)

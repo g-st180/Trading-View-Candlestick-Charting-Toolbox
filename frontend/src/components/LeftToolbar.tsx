@@ -120,6 +120,146 @@ function AbcdPatternIcon({
 	);
 }
 
+/** Elliott impulse (1-2-3-4-5) icon with smoother, clearer wave shape. */
+function ElliottImpulseIcon({
+	className = 'h-7 w-7',
+	strokeWidth = ICON_SW,
+}: {
+	className?: string;
+	strokeWidth?: number;
+}) {
+	return (
+		<Icon className={className} strokeWidth={strokeWidth}>
+			<polyline
+				points="2.8,17.2 8.2,8.7 15.6,17.2 21.2,8.7"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.05"
+				strokeLinejoin="round"
+				strokeLinecap="round"
+			/>
+			<circle cx="2.8" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="8.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="15.6" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="21.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">1</text>
+			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">5</text>
+		</Icon>
+	);
+}
+
+/** Elliott correction (A-B-C) icon: simple 3-leg corrective zigzag. */
+function ElliottCorrectionIcon({
+	className = 'h-7 w-7',
+	strokeWidth = ICON_SW,
+}: {
+	className?: string;
+	strokeWidth?: number;
+}) {
+	return (
+		<Icon className={className} strokeWidth={strokeWidth}>
+			<polyline
+				points="2.8,17.2 8.2,8.7 15.6,17.2 21.2,8.7"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.05"
+				strokeLinejoin="round"
+				strokeLinecap="round"
+			/>
+			<circle cx="2.8" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="8.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="15.6" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="21.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.0" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">A</text>
+			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.0" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">C</text>
+		</Icon>
+	);
+}
+
+/** Elliott triangle icon: same geometry as impulse icon, with A and E labels on peaks. */
+function ElliottTriangleIcon({
+	className = 'h-7 w-7',
+	strokeWidth = ICON_SW,
+}: {
+	className?: string;
+	strokeWidth?: number;
+}) {
+	return (
+		<Icon className={className} strokeWidth={strokeWidth}>
+			<polyline
+				points="2.8,17.2 8.2,8.7 15.6,17.2 21.2,8.7"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.05"
+				strokeLinejoin="round"
+				strokeLinecap="round"
+			/>
+			<circle cx="2.8" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="8.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="15.6" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="21.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">A</text>
+			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">E</text>
+		</Icon>
+	);
+}
+
+/** Elliott double combo icon: correction-style wave with W and Y peak labels. */
+function ElliottDoubleComboIcon({
+	className = 'h-7 w-7',
+	strokeWidth = ICON_SW,
+}: {
+	className?: string;
+	strokeWidth?: number;
+}) {
+	return (
+		<Icon className={className} strokeWidth={strokeWidth}>
+			<polyline
+				points="2.8,17.2 8.2,8.7 15.6,17.2 21.2,8.7"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.05"
+				strokeLinejoin="round"
+				strokeLinecap="round"
+			/>
+			<circle cx="2.8" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="8.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="15.6" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="21.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">W</text>
+			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">Y</text>
+		</Icon>
+	);
+}
+
+/** Elliott triple combo icon: correction-style wave with W and Z peak labels. */
+function ElliottTripleComboIcon({
+	className = 'h-7 w-7',
+	strokeWidth = ICON_SW,
+}: {
+	className?: string;
+	strokeWidth?: number;
+}) {
+	return (
+		<Icon className={className} strokeWidth={strokeWidth}>
+			<polyline
+				points="2.8,17.2 8.2,8.7 15.6,17.2 21.2,8.7"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.05"
+				strokeLinejoin="round"
+				strokeLinecap="round"
+			/>
+			<circle cx="2.8" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="8.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="15.6" cy="17.2" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<circle cx="21.2" cy="8.7" r={BUBBLE_R} fill="white" stroke="currentColor" strokeWidth={BUBBLE_SW} />
+			<text x="8.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">W</text>
+			<text x="21.2" y="4.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="6.2" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">Z</text>
+		</Icon>
+	);
+}
+
 const topTools: ToolButton[] = [
 	{
 		id: 'crosshair',
@@ -441,11 +581,11 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 		{ id: 'abcd', label: 'ABCD Pattern' },
 	];
 	const elliottWavesMenuItems: Array<{ id: string; label: string }> = [
-		{ id: 'elliott-impulse', label: 'Elliott Impulse Wave (12345)' },
-		{ id: 'elliott-correction', label: 'Elliott Correction Wave (ABC)' },
-		{ id: 'elliott-triangle', label: 'Elliott Triangle Wave (ABCDE)' },
-		{ id: 'elliott-double-combo', label: 'Elliott Double Combo Wave (WXY)' },
-		{ id: 'elliott-triple-combo', label: 'Elliott Triple Combo Wave (WXYXZ)' },
+		{ id: 'elliott-impulse', label: 'Elliott Impulse Wave (1·2·3·4·5)' },
+		{ id: 'elliott-correction', label: 'Elliott Correction Wave (A·B·C)' },
+		{ id: 'elliott-triangle', label: 'Elliott Triangle Wave (A·B·C·D·E)' },
+		{ id: 'elliott-double-combo', label: 'Elliott Double Combo Wave (W·X·Y)' },
+		{ id: 'elliott-triple-combo', label: 'Elliott Triple Combo Wave (W·X·Y·X\'·Z)' },
 	];
 
 	const fibonacciMenuItems: Array<{ id: 'fibonacci-retracement' | 'gann-box'; label: string; icon: string }> = [
@@ -921,6 +1061,16 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 							<HeadShouldersPatternIcon className="h-7 w-7" strokeWidth={ICON_SW} />
 						) : selectedPatternsType === 'abcd' ? (
 							<AbcdPatternIcon className="h-7 w-7" strokeWidth={ICON_SW} />
+						) : selectedPatternsType === 'elliott-impulse' ? (
+							<ElliottImpulseIcon className="h-7 w-7" strokeWidth={ICON_SW} />
+						) : selectedPatternsType === 'elliott-correction' ? (
+							<ElliottCorrectionIcon className="h-7 w-7" strokeWidth={ICON_SW} />
+						) : selectedPatternsType === 'elliott-triangle' ? (
+							<ElliottTriangleIcon className="h-7 w-7" strokeWidth={ICON_SW} />
+						) : selectedPatternsType === 'elliott-double-combo' ? (
+							<ElliottDoubleComboIcon className="h-7 w-7" strokeWidth={ICON_SW} />
+						) : selectedPatternsType === 'elliott-triple-combo' ? (
+							<ElliottTripleComboIcon className="h-7 w-7" strokeWidth={ICON_SW} />
 						) : (
 							tool.icon
 						)}
@@ -1019,9 +1169,21 @@ export default function LeftToolbar({ selectedCrosshairType, onCrosshairTypeChan
 										].join(' ')}
 									>
 										<span className="flex items-center gap-2 whitespace-nowrap">
-											<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW}>
-												<polyline points="3,20 6,8 9,14 14,4 17,12 21,6" fill="none" stroke="currentColor" strokeWidth="1.05" strokeLinejoin="round" strokeLinecap="round" />
-											</Icon>
+											{item.id === 'elliott-impulse' ? (
+												<ElliottImpulseIcon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW} />
+											) : item.id === 'elliott-correction' ? (
+												<ElliottCorrectionIcon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW} />
+											) : item.id === 'elliott-triangle' ? (
+												<ElliottTriangleIcon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW} />
+											) : item.id === 'elliott-double-combo' ? (
+												<ElliottDoubleComboIcon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW} />
+											) : item.id === 'elliott-triple-combo' ? (
+												<ElliottTripleComboIcon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW} />
+											) : (
+												<Icon className={`h-7 w-7 ${isSelected ? 'text-white' : 'text-slate-900'}`} strokeWidth={ICON_SW}>
+													<polyline points="3,20 6,8 9,14 14,4 17,12 21,6" fill="none" stroke="currentColor" strokeWidth="1.05" strokeLinejoin="round" strokeLinecap="round" />
+												</Icon>
+											)}
 											{item.label}
 										</span>
 										{(isSelected || isHovered) && (

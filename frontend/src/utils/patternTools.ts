@@ -38,11 +38,11 @@ export const PATTERN_TOOLS: Record<string, PatternConfig> = {
 		fill: false,
 	},
 	abcd:                  { points: 4, labels: ['A', 'B', 'C', 'D'], diagonals: [[0, 2], [1, 3]], fill: false },
-	'elliott-impulse':     { points: 6, labels: ['0', '1', '2', '3', '4', '5'], fill: false },
-	'elliott-correction':  { points: 4, labels: ['0', 'A', 'B', 'C'], fill: false },
-	'elliott-triangle':    { points: 6, labels: ['0', 'A', 'B', 'C', 'D', 'E'], fill: false },
-	'elliott-double-combo':{ points: 4, labels: ['0', 'W', 'X', 'Y'], fill: false },
-	'elliott-triple-combo':{ points: 6, labels: ['0', 'W', 'X', 'Y', 'X\'', 'Z'], fill: false },
+	'elliott-impulse':     { points: 6, labels: ['(0)', '(1)', '(2)', '(3)', '(4)', '(5)'], fill: false },
+	'elliott-correction':  { points: 4, labels: ['(0)', '(A)', '(B)', '(C)'], fill: false },
+	'elliott-triangle':    { points: 6, labels: ['(0)', '(A)', '(B)', '(C)', '(D)', '(E)'], fill: false },
+	'elliott-double-combo':{ points: 4, labels: ['(0)', '(W)', '(X)', '(Y)'], fill: false },
+	'elliott-triple-combo':{ points: 6, labels: ['(0)', '(W)', '(X)', '(Y)', '(X\')', '(Z)'], fill: false },
 };
 
 export function isPatternTool(type: string | null): boolean {
